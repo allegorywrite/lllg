@@ -6,7 +6,7 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent)
     : Q(_Q),
       parent(_parent),
       depth(parent == nullptr ? 0 : parent->depth + 1),
-      g(0),
+      g(parent == nullptr ? 0 : parent->g),
       priorities(Q.size()),
       order(Q.size(), 0),
       search_tree()
@@ -27,10 +27,10 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent)
       priorities[i] = std::make_tuple(p, q, std::get<2>(pp));
     }
 
-    // compute cost
-    HNode *n = this;
-    while (n->parent != nullptr && D->get(i, n->Q[i]) == 0) n = n->parent;
-    g += n->depth + 1;
+    // compute cost, sum-of-loss
+    if (parent != nullptr) {
+      if (parent->Q[i] != Q[i] || D->get(i, Q[i]) > 0) g += 1;
+    }
   }
 
   // set order
@@ -154,8 +154,14 @@ Solution LaCAM::solve()
       // known configuration
       auto H_known = iter->second;
       auto H_new = new HNode(Q_to, D, H);
-      GC_HNodes.push_back(H_new);
-      OPEN.push_front((H_known->g < H_new->g) ? H_known : H_new);
+      if (H_known->g < H_new->g) {
+        OPEN.push_front(H_known);
+        delete H_new;
+      } else {
+        // replace
+        OPEN.push_front(H_new);
+        GC_HNodes.push_back(H_new);
+      }
     } else {
       // new one -> insert
       auto H_new = new HNode(Q_to, D, H);

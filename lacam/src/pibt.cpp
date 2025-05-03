@@ -74,8 +74,8 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
 
     // AAMAS-24 version
     if (!LocalGuide::ON && GlobalGuide::ON) {
-      auto gg = (global_guide != nullptr) ? global_guide->get(i, u)
-                                          : std::make_pair(0, 0);
+      auto &&gg = (global_guide != nullptr) ? global_guide->get(i, u)
+                                            : std::make_pair(0, 0);
       auto &&gg_original = global_guide->get(i, Q_from[i]);
       if (gg_original.first == 0 && gg.first == 0 &&
           gg_original.second > gg.second)
@@ -91,6 +91,7 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
     C_next[i][k] = u;
     C_cost[k] = get_successor_cost(u, k);
   }
+  // stay-in-place action
   C_next[i][K] = Q_from[i];
   C_cost[K] = get_successor_cost(Q_from[i], K);
   std::iota(C_indices[i].begin(), C_indices[i].begin() + K + 1, 0);
@@ -103,6 +104,7 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
   const auto swap_agent = is_swap_required_and_possible(
       i, Q_from, Q_to, C_next[i][C_indices[i][0]]);
   if (swap_agent != NO_AGENT) {
+    // recompute action cost
     for (size_t k = 0; k < K + 1; ++k) {
       C_cost[k] = get_successor_cost(C_next[i][k], k, true);
       C_indices[i][k] = k;

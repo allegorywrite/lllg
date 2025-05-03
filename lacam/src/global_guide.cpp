@@ -13,6 +13,7 @@ GlobalGuide::GlobalGuide(const Instance *_ins, DistTable *_D,
       T(get_makespan_lower_bound(*ins, *_D) + COST_MARGIN),
       D(_D),
       paths(N),
+      OPEN(N, std::queue<Vertex *>()),
       guide_table(
           N, std::vector<GGHeuristic>(V_size, std::make_pair(V_size, V_size)))
 {
@@ -25,9 +26,8 @@ void GlobalGuide::construct()
   if (!ON) return;
   if (paths[0].empty()) run_suo();
 
-  // initialize lazy BFS
+  // initialize lazy BFS, follow the traffic flow optimisation paper
   for (int i = 0; i < N; ++i) {
-    OPEN.push_back(std::queue<Vertex *>());
     int T = paths[i].size() - 1;
     for (int t = 0; t <= T; ++t) {
       auto &&v = paths[i][t];
@@ -39,6 +39,8 @@ void GlobalGuide::construct()
 
 void GlobalGuide::run_suo()
 {
+  // the implementation follows the lacam3 paper
+
   // define path finding utilities
   // vertex, cost-to-come, cost-to-go, collision, parent
   using Node = std::tuple<Vertex *, int, int, int, Vertex *>;
@@ -154,6 +156,8 @@ GGHeuristic GlobalGuide::get(const int i, Vertex *v)
   if (!ON) return std::make_pair(D->get(i, v), 0);
 
   if (guide_table[i][v->id].first < V_size) return guide_table[i][v->id];
+
+  // lazy BFS
   while (!OPEN[i].empty()) {
     auto n = OPEN[i].front();
     OPEN[i].pop();

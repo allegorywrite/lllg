@@ -1,7 +1,6 @@
 #include "../include/post_processing.hpp"
 
 #include "../include/dist_table.hpp"
-#include "../include/planner.hpp"
 
 bool is_feasible_solution(const Instance &ins, const Solution &solution,
                           const int verbose)
@@ -65,8 +64,9 @@ void print_stats(const int verbose, const Deadline *deadline,
   const auto sum_of_costs = get_sum_of_costs(solution);
   const auto sum_of_costs_lb = get_sum_of_costs_lower_bound(ins, dist_table);
   const auto sum_of_loss = get_sum_of_loss(solution);
-  info(1, verbose, deadline, "solved", "\tmakespan: ", makespan,
-       " (lb=", makespan_lb, ", ub=", ceil((float)makespan / makespan_lb), ")",
+  info(1, verbose, deadline, "solved", "\tcomp_time_ms: ", comp_time_ms,
+       "\tmakespan: ", makespan, " (lb=", makespan_lb,
+       ", ub=", ceil((float)makespan / makespan_lb), ")",
        "\tsum_of_costs: ", sum_of_costs, " (lb=", sum_of_costs_lb,
        ", ub=", ceil((float)sum_of_costs / sum_of_costs_lb), ")",
        "\tsum_of_loss: ", sum_of_loss, " (lb=", sum_of_costs_lb,

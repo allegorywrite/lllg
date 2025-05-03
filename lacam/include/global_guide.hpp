@@ -6,6 +6,15 @@
  * Shuai D Han and Jingjin Yu.
  * In Proceedings of IEEE International Conference on Robotics and Automation
  * (ICRA). 2022.
+ *
+ * Engineering LaCAM $^\ast $: Towards Real-Time, Large-Scale, and Near-Optimal
+ * Multi-Agent Pathfinding. Okumura, K. Proceedings of International Conference
+ * In Proceedings on Autonomous Agents and Multiagent Systems (AAMAS). 2024.
+ *
+ * Traffic flow optimisation for lifelong multi-agent path finding.
+ * Chen, Zhe, et al.
+ * In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI).
+ * 2024.
  */
 #pragma once
 
@@ -15,7 +24,7 @@
 #include "metrics.hpp"
 #include "utils.hpp"
 
-using GGHeuristic = std::pair<int, int>;
+using GGHeuristic = std::pair<int, int>;  // GG: global guide
 
 struct GlobalGuide {
   const Instance *ins;

@@ -1,4 +1,4 @@
-# better-pibt
+# local guidance for MAPF
 
 This repo is based on [lacam3](https://kei18.github.io/lacam3/).
 
@@ -16,7 +16,7 @@ git clone --recursive {this repo}
 Then, build the project.
 
 ```sh
-cmake -B build && make -C build
+cmake -B build && make -C build -j4
 ```
 
 ## Usage
@@ -41,8 +41,6 @@ For example,
 ```sh
 mapf-visualizer assets/random-32-32-10.map build/result.txt
 ```
-
-![](./assets/random-32-32-10_400agents.jpg)
 
 ## Notes
 

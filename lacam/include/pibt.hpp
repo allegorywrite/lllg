@@ -5,6 +5,11 @@
  * Priority Inheritance with Backtracking for Iterative Multi-agent Path
  * Finding. Keisuke Okumura, Manao Machida, Xavier Défago & Yasumasa Tamura.
  * Artificial Intelligence (AIJ). 2022.
+ *
+ * swap:
+ * Improving lacam for scalable eventually optimal multi-agent pathfinding.
+ * Keisuke Okumura.
+ * IJCAI. 2023.
  */
 #pragma once
 #include "dist_table.hpp"

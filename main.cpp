@@ -1,5 +1,4 @@
 #include <argparse/argparse.hpp>
-#include <iostream>
 #include <planner.hpp>
 
 int main(int argc, char *argv[])
@@ -36,14 +35,14 @@ int main(int argc, char *argv[])
       .default_value(false)
       .implicit_value(true);
 
-  program.add_argument("--no_lg").default_value(false).implicit_value(true);
+  program.add_argument("--lg").default_value(false).implicit_value(true);
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
   program.add_argument("--lg_window").scan<'d', int>().default_value(10);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
-  program.add_argument("--no_gg").default_value(false).implicit_value(true);
+  program.add_argument("--gg").default_value(false).implicit_value(true);
 
-  program.add_argument("--no_lns").default_value(false).implicit_value(true);
+  program.add_argument("--lns").default_value(false).implicit_value(true);
   program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
 
   try {
@@ -70,19 +69,19 @@ int main(int argc, char *argv[])
   // set hyper parameters
 
   // local guide
-  LocalGuide::ON = !program.get<bool>("no_lg");
+  LocalGuide::ON = program.get<bool>("lg");
   LocalGuide::WINDOW = program.get<int>("lg_window");
   LocalGuide::NUM_REFINE = program.get<int>("lg_num_refine");
 
   // global guide
-  GlobalGuide::ON = !program.get<bool>("no_gg");
+  GlobalGuide::ON = program.get<bool>("gg");
   GlobalGuide::COST_MARGIN = program.get<int>("gg_margin");
 
   // pibt
   PIBT::SWAP = !program.get<bool>("no_pibt_swap");
 
   // lns, plns
-  LNS::ON = !program.get<bool>("no_lns");
+  LNS::ON = program.get<bool>("lns");
   PLNS::NUM_REFINERS = program.get<int>("plns_num_refiners");
 
   // solve
