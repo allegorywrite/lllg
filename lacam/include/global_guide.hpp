@@ -41,7 +41,7 @@ struct GlobalGuide {
   std::vector<std::queue<Vertex *>> OPEN;             // search queue
   std::vector<std::vector<GGHeuristic>> guide_table;  // who, where -> value
 
-  // Hyperparametes
+  // hyperparameters
   static bool ON;
   static int COST_MARGIN;
 

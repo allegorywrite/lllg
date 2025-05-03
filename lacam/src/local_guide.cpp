@@ -50,7 +50,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
             : CT.getCollisionCost(parent->where, where, parent->when);
     n->g = (parent == nullptr) ? 0 : parent->g + 1;
     if (collision >= 1) n->g += 1 + collision * 1e-7;
-    n->g = std::max(n->g, (float)(n->when + WINDOW - 2));
 
     // h-value
     n->h = D->get(who, where);

@@ -1,6 +1,6 @@
 # local guidance for MAPF
 
-This repo is based on [lacam3](https://kei18.github.io/lacam3/).
+This repository is based on [lacam3](https://kei18.github.io/lacam3/).
 
 ## Building
 
