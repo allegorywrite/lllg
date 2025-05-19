@@ -43,14 +43,22 @@ struct LocalGuide {
   CollisionTable CT;
   std::vector<Path> guide_paths;
 
+  // 参照軌道の履歴を保存
+  std::vector<std::vector<Path>> guide_paths_history;  // 各ステップでの参照軌道の履歴
+  int current_step;  // 現在のステップ数
+
   WSPPNodes wspp_nodes;
   std::vector<WSPPNodes> CLOSED;
   Config Q_to;
 
   // hyper parameters
   static bool ON;
-  static int WINDOW;
+  static std::vector<int> WINDOWS;  // 各エージェントのウィンドウサイズ
   static int NUM_REFINE;
+  static bool DYNAMIC_WINDOW;  // 動的ウィンドウサイズの有効/無効
+  static int MIN_WINDOW;       // 最小ウィンドウサイズ
+  static int MAX_WINDOW;       // 最大ウィンドウサイズ
+  static float OCCUPANCY_THRESHOLD;  // 占有率の閾値
 
   // guidance
   GlobalGuide* global_guide;
@@ -61,4 +69,14 @@ struct LocalGuide {
 
   void construct(const Config& Q_from, const std::vector<int>& order);
   LocalHeuristic get(const int i, Vertex* v);
+
+  // 履歴関連のメソッド
+  void clear_history();  // 履歴をクリア
+  void save_current_paths();  // 現在の参照軌道を履歴に保存
+  const std::vector<Path>& get_paths_at_step(int step) const;  // 特定のステップの参照軌道を取得
+  int get_history_size() const;  // 履歴のサイズを取得
+
+  // 占有率計算と動的ウィンドウサイズ調整のメソッド
+  float calculate_occupancy(const int i, const Config& Q_from);  // エージェントiの周りの占有率を計算
+  void update_window_size(const int i, const Config& Q_from);    // 占有率に基づいてウィンドウサイズを更新
 };
