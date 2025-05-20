@@ -53,7 +53,15 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_occupancy_threshold")
       .help("occupancy threshold for dynamic window adjustment")
       .scan<'g', float>()
-      .default_value(0.3f);
+      .default_value(0.1f);
+  program.add_argument("--lg_use_collision_based_window")
+      .help("enable collision-based window size adjustment")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_collision_threshold")
+      .help("collision threshold for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(0.5f);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -92,6 +100,8 @@ int main(int argc, char *argv[])
   LocalGuide::MIN_WINDOW = program.get<int>("lg_min_window");
   LocalGuide::MAX_WINDOW = program.get<int>("lg_max_window");
   LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
+  LocalGuide::USE_COLLISION_BASED_WINDOW = program.get<bool>("lg_use_collision_based_window");
+  LocalGuide::COLLISION_THRESHOLD = program.get<float>("lg_collision_threshold");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
