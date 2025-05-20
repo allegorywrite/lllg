@@ -44,3 +44,8 @@ map
 scen
 **/local/
 .clangd
+
+.venv
+results
+.clinerules
+*experiment_summary.csv

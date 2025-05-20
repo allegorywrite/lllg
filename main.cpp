@@ -44,6 +44,10 @@ int main(int argc, char *argv[])
 
   program.add_argument("--lns").default_value(false).implicit_value(true);
   program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
+  program.add_argument("--use_sipp")
+      .help("use SIPP for local guide")
+      .default_value(false)
+      .implicit_value(true);
 
   try {
     program.parse_args(argc, argv);
@@ -85,8 +89,9 @@ int main(int argc, char *argv[])
   PLNS::NUM_REFINERS = program.get<int>("plns_num_refiners");
 
   // solve
+  const auto use_sipp = program.get<bool>("use_sipp");
   const auto deadline = Deadline(time_limit_sec * 1000);
-  const auto solution = solve(ins, verbose - 1, &deadline, seed);
+  const auto solution = solve(ins, verbose - 1, &deadline, seed, use_sipp);
   const auto comp_time_ms = deadline.elapsed_ms();
 
   // failure

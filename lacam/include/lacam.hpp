@@ -70,7 +70,7 @@ struct LaCAM {
   static bool ANYTIME;
 
   LaCAM(const Instance *_ins, DistTable *_D, int _verbose = 0,
-        const Deadline *_deadline = nullptr, int _seed = 0);
+        const Deadline *_deadline = nullptr, int _seed = 0, bool _use_sipp = false);
   ~LaCAM();
   Solution solve();
   bool set_new_config(HNode *S, LNode *M, Config &Q_to);

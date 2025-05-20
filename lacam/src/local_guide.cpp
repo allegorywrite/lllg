@@ -5,10 +5,11 @@ int LocalGuide::WINDOW = 10;
 int LocalGuide::NUM_REFINE = 1;
 
 LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
-                       GlobalGuide* gg)
+                       GlobalGuide* gg, bool _use_sipp)
     : ins(_ins),
       MT(std::mt19937(seed)),
       N(ins->N),
+      use_sipp_(_use_sipp), // Initialize use_sipp_
       V_size(ins->G->size()),
       D(_D),
       CT(ins, true),
@@ -63,54 +64,74 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   std::vector<std::pair<int, int> > CLOSED_idx;
 
   auto update_guide_path = [&](const int i) {
-    // special case
-    if (Q_from[i] == ins->goals[i]) {
-      for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
-      return;
-    }
+    if (use_sipp_) {
+      // Use SIPP
+      guide_paths[i] = sipp(i, Q_from[i], ins->goals[i], D, &CT, nullptr, WINDOW -1);
+      // Ensure path has WINDOW length, padding with goal if shorter, truncating if longer
+      if (guide_paths[i].empty() && Q_from[i] != ins->goals[i]) { // if SIPP fails, use simple stay
+          for (auto t = 0; t < WINDOW; ++t) guide_paths[i].push_back(Q_from[i]);
+      } else if (guide_paths[i].empty() && Q_from[i] == ins->goals[i]) { // if SIPP returns empty for already at goal
+          for (auto t = 0; t < WINDOW; ++t) guide_paths[i].push_back(ins->goals[i]);
+      } else {
+          if (guide_paths[i].size() < WINDOW) {
+              Vertex* last_node = guide_paths[i].back();
+              while (guide_paths[i].size() < WINDOW) {
+                  guide_paths[i].push_back(last_node);
+              }
+          } else if (guide_paths[i].size() > WINDOW) {
+              guide_paths[i].resize(WINDOW);
+          }
+      }
+    } else {
+      // Use space-time A* (original implementation)
+      // special case
+      if (Q_from[i] == ins->goals[i]) {
+        for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
+        return;
+      }
 
-    // initialize search utils
-    std::priority_queue<WSPPNode*, WSPPNodes, decltype(cmp)> OPEN(cmp);
-    CLOSED_idx.clear();
-    wspp_node_idx = 0;
+      // initialize search utils
+      std::priority_queue<WSPPNode*, WSPPNodes, decltype(cmp)> OPEN(cmp);
+      CLOSED_idx.clear();
+      wspp_node_idx = 0;
 
-    // initial node
-    auto n_init = get_node(i, Q_from[i], nullptr);
-    OPEN.push(n_init);
+      // initial node
+      auto n_init = get_node(i, Q_from[i], nullptr);
+      OPEN.push(n_init);
 
-    // serach
-    while (!OPEN.empty()) {
-      // minimum node
-      auto n = OPEN.top();
-      OPEN.pop();
+      // serach
+      while (!OPEN.empty()) {
+        // minimum node
+        auto n = OPEN.top();
+        OPEN.pop();
 
-      // check closed
-      if (CLOSED[n->when][n->where->id] != nullptr) continue;
-      CLOSED[n->when][n->where->id] = n;
-      CLOSED_idx.emplace_back(n->when, n->where->id);
+        // check closed
+        if (CLOSED[n->when][n->where->id] != nullptr) continue;
+        CLOSED[n->when][n->where->id] = n;
+        CLOSED_idx.emplace_back(n->when, n->where->id);
 
-      // check goal condition
-      if (n->when == WINDOW - 1) {
-        // register to CT
-        while (n != nullptr) {
-          guide_paths[i][n->when] = n->where;
-          n = n->parent;
+        // check goal condition
+        if (n->when == WINDOW - 1) {
+          // register to CT
+          while (n != nullptr) {
+            guide_paths[i][n->when] = n->where;
+            n = n->parent;
+          }
+          break;
         }
-        break;
-      }
 
-      // expand
-      auto&& C = n->where->actions;
-      std::shuffle(C.begin(), C.end(), MT);
-      for (auto&& v : C) {
-        const auto t = n->when + 1;
-        if (CLOSED[t][v->id] != nullptr) continue;
-        OPEN.push(get_node(i, v, n));
+        // expand
+        auto&& C = n->where->actions;
+        std::shuffle(C.begin(), C.end(), MT);
+        for (auto&& v : C) {
+          const auto t = n->when + 1;
+          if (CLOSED[t][v->id] != nullptr) continue;
+          OPEN.push(get_node(i, v, n));
+        }
       }
+      // clear CLOSED
+      for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
     }
-
-    // clear CLOSED
-    for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
   };
 
   // create initial candidate

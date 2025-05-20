@@ -8,6 +8,7 @@
 #include "global_guide.hpp"
 #include "graph.hpp"
 #include "instance.hpp"
+#include "sipp.hpp"  // Add SIPP header
 #include "utils.hpp"
 
 // windowed soft prioritized planning
@@ -54,9 +55,10 @@ struct LocalGuide {
 
   // guidance
   GlobalGuide* global_guide;
+  bool use_sipp_; // Flag to use SIPP
 
   LocalGuide(const Instance* _ins, DistTable* _D, int seed = 0,
-             GlobalGuide* _global_guide = nullptr);
+             GlobalGuide* _global_guide = nullptr, bool _use_sipp = false);
   ~LocalGuide();
 
   void construct(const Config& Q_from, const std::vector<int>& order);
