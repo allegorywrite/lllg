@@ -78,7 +78,8 @@ static const std::regex r_map_name = std::regex(R"(.+/(.+))");
 
 void make_log(const Instance &ins, const Solution &solution,
               const std::string &output_name, const double comp_time_ms,
-              const std::string &map_name, const int seed, const bool log_short)
+              const std::string &map_name, const int seed,
+              const bool log_short, const LocalGuide* local_guide)
 {
   // map name
   std::smatch results;
@@ -127,5 +128,29 @@ void make_log(const Instance &ins, const Solution &solution,
     }
     log << "\n";
   }
+
+  // ローカルガイダンスの出力
+  if (LocalGuide::ON && local_guide != nullptr) {
+    log << "local_guidance=\n";
+    // 履歴のサイズを出力
+    log << "history_size=" << local_guide->get_history_size() << "\n";
+    
+    // 各ステップの参照軌道を出力
+    for (int step = 0; step < local_guide->get_history_size(); ++step) {
+      const auto& paths = local_guide->get_paths_at_step(step);
+      log << "step" << step << ":\n";
+      for (size_t i = 0; i < ins.N; ++i) {
+        log << "agent" << i << ":";
+        for (size_t t = 0; t < paths[i].size(); ++t) {
+          if (paths[i][t] != nullptr) {
+            log << "(" << get_x(paths[i][t]->index) << "," 
+                << get_y(paths[i][t]->index) << "),";
+          }
+        }
+        log << "\n";
+      }
+    }
+  }
+
   log.close();
 }

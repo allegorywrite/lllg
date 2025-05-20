@@ -38,6 +38,22 @@ int main(int argc, char *argv[])
   program.add_argument("--lg").default_value(false).implicit_value(true);
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
   program.add_argument("--lg_window").scan<'d', int>().default_value(10);
+  program.add_argument("--lg_dynamic_window")
+      .help("enable dynamic window size based on occupancy")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_min_window")
+      .help("minimum window size for dynamic window")
+      .scan<'d', int>()
+      .default_value(5);
+  program.add_argument("--lg_max_window")
+      .help("maximum window size for dynamic window")
+      .scan<'d', int>()
+      .default_value(20);
+  program.add_argument("--lg_occupancy_threshold")
+      .help("occupancy threshold for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(0.3f);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -74,8 +90,12 @@ int main(int argc, char *argv[])
 
   // local guide
   LocalGuide::ON = program.get<bool>("lg");
-  LocalGuide::WINDOW = program.get<int>("lg_window");
+  LocalGuide::WINDOWS.resize(ins.N, program.get<int>("lg_window"));
   LocalGuide::NUM_REFINE = program.get<int>("lg_num_refine");
+  LocalGuide::DYNAMIC_WINDOW = program.get<bool>("lg_dynamic_window");
+  LocalGuide::MIN_WINDOW = program.get<int>("lg_min_window");
+  LocalGuide::MAX_WINDOW = program.get<int>("lg_max_window");
+  LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
@@ -91,20 +111,26 @@ int main(int argc, char *argv[])
   // solve
   const auto use_sipp = program.get<bool>("use_sipp");
   const auto deadline = Deadline(time_limit_sec * 1000);
-  const auto solution = solve(ins, verbose - 1, &deadline, seed, use_sipp);
+  auto [solution, lacam] = solve(ins, verbose - 1, &deadline, seed, use_sipp);
   const auto comp_time_ms = deadline.elapsed_ms();
 
   // failure
-  if (solution.empty()) info(1, verbose, &deadline, "failed to solve");
+  if (solution.empty()) {
+    info(1, verbose, &deadline, "failed to solve");
+    delete lacam;
+    return 1;
+  }
 
   // check feasibility
   if (!is_feasible_solution(ins, solution, verbose)) {
     info(0, verbose, &deadline, "invalid solution");
+    delete lacam;
     return 1;
   }
 
   // post processing
   print_stats(verbose, &deadline, ins, solution, comp_time_ms);
-  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short);
+  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide);
+  delete lacam;
   return 0;
 }
