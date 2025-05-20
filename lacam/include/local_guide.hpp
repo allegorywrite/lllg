@@ -57,9 +57,11 @@ struct LocalGuide {
   static std::vector<int> WINDOWS;  // 各エージェントのウィンドウサイズ
   static int NUM_REFINE;
   static bool DYNAMIC_WINDOW;  // 動的ウィンドウサイズの有効/無効
+  static bool USE_COLLISION_BASED_WINDOW;  // 衝突量ベースのウィンドウサイズ調整を有効にするかどうか
   static int MIN_WINDOW;       // 最小ウィンドウサイズ
   static int MAX_WINDOW;       // 最大ウィンドウサイズ
   static float OCCUPANCY_THRESHOLD;  // 占有率の閾値
+  static float COLLISION_THRESHOLD;  // 衝突量の閾値
 
   // guidance
   GlobalGuide* global_guide;
@@ -80,5 +82,6 @@ struct LocalGuide {
 
   // 占有率計算と動的ウィンドウサイズ調整のメソッド
   float calculate_occupancy(const int i, const Config& Q_from);  // エージェントiの周りの占有率を計算
-  void update_window_size(const int i, const Config& Q_from);    // 占有率に基づいてウィンドウサイズを更新
+  float calculate_collision_rate(const int i, const Path& path);  // エージェントiの参照軌道の衝突率を計算
+  void update_window_size(const int i, const Config& Q_from);    // 占有率または衝突量に基づいてウィンドウサイズを更新
 };

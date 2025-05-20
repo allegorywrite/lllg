@@ -1,0 +1,25 @@
+
+## 衝突量ベースの動的Window
+build/main -i assets/random-32-32-10-random-1.scen \
+    -m assets/random-32-32-10.map -N 200 -v 3 --lg \
+    --lg_dynamic_window --lg_use_collision_based_window \
+    --lg_collision_threshold 0.1 --lg_window 5
+
+## 占有率ベースの動的Window
+build/main -i assets/random-32-32-10-random-1.scen \
+    -m assets/random-32-32-10.map -N 200 -v 3 --lg  \
+    --lg_dynamic_window --lg_occupancy_threshold 0.3 --lg_window 5
+
+## local guidance
+build/main -i assets/random-32-32-10-random-1.scen \
+    -m assets/random-32-32-10.map -N 200 -v 3 --lg  --lg_window 5
+
+## vanilla
+build/main -i assets/random-32-32-10-random-1.scen \
+    -m assets/random-32-32-10.map -N 200 -v 3
+
+### ビルド
+make -C build -j4
+
+### 可視化
+mapf-visualizer assets/random-32-32-10.map build/result.txt

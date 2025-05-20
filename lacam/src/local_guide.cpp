@@ -6,9 +6,11 @@ bool LocalGuide::ON = true;
 std::vector<int> LocalGuide::WINDOWS;  // 各エージェントのウィンドウサイズ
 int LocalGuide::NUM_REFINE = 1;
 bool LocalGuide::DYNAMIC_WINDOW = false;
+bool LocalGuide::USE_COLLISION_BASED_WINDOW = false;  // 衝突量ベースのウィンドウサイズ調整を有効にするかどうか
 int LocalGuide::MIN_WINDOW = 5;
 int LocalGuide::MAX_WINDOW = 20;
 float LocalGuide::OCCUPANCY_THRESHOLD = 0.3f;
+float LocalGuide::COLLISION_THRESHOLD = 0.5f;  // 衝突量の閾値
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -146,24 +148,66 @@ float LocalGuide::calculate_occupancy(const int i, const Config& Q_from) {
   return occupancy;
 }
 
+float LocalGuide::calculate_collision_rate(const int i, const Path& path) {
+  if (!USE_COLLISION_BASED_WINDOW) return 0.0f;
+
+  int total_collisions = 0;
+  int total_steps = 0;
+
+  // パスの各ステップで衝突をチェック
+  for (int t = 0; t < path.size(); ++t) {
+    if (path[t] == nullptr) continue;
+    
+    // 他のエージェントとの衝突をチェック
+    for (int j = 0; j < N; ++j) {
+      if (j == i) continue;
+      if (t < guide_paths[j].size() && guide_paths[j][t] != nullptr) {
+        if (path[t] == guide_paths[j][t]) {
+          total_collisions++;
+        }
+      }
+    }
+    total_steps++;
+  }
+
+  return total_steps > 0 ? static_cast<float>(total_collisions) / total_steps : 0.0f;
+}
+
 void LocalGuide::update_window_size(const int i, const Config& Q_from) {
   if (!DYNAMIC_WINDOW) return;
 
-  const float occupancy = calculate_occupancy(i, Q_from);
   int old_window = WINDOWS[i];
-  
-  // 占有率が閾値を超える場合、ウィンドウサイズを小さくする
-  if (occupancy < OCCUPANCY_THRESHOLD) {
-    WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
-    // std::cout << "DEBUG: occupancy is low (" << occupancy << "), decreasing window to " << WINDOWS[i] << std::endl;
-  } else {
-    // 占有率が低い場合、ウィンドウサイズを大きくする
-    WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
-    // std::cout << "DEBUG: occupancy is high (" << occupancy << "), increasing window to " << WINDOWS[i] << std::endl;
+  bool window_changed = false;
+
+  // 占有率ベースの調整
+  if (!USE_COLLISION_BASED_WINDOW) {
+    const float occupancy = calculate_occupancy(i, Q_from);
+    if (occupancy < OCCUPANCY_THRESHOLD) {
+      WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
+      window_changed = true;
+    } else {
+      WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
+      window_changed = true;
+    }
+  }
+  // 衝突量ベースの調整
+  else {
+    const float collision_rate = calculate_collision_rate(i, guide_paths[i]);
+    if (collision_rate < COLLISION_THRESHOLD) {
+      // 衝突が少ない場合はウィンドウサイズを小さくしてより短期的な計画に
+      WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
+      // std::cout << "DEBUG: collision rate is low (" << collision_rate << "), decreasing window to " << WINDOWS[i] << std::endl;
+      window_changed = true;
+    } else {
+      // 衝突が多い場合はウィンドウサイズを大きくしてより長期的な計画に
+      WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
+      // std::cout << "DEBUG: collision rate is high (" << collision_rate << "), increasing window to " << WINDOWS[i] << std::endl;
+      window_changed = true;
+    }
   }
 
   // ウィンドウサイズが変更された場合、guide_pathsのサイズも更新
-  if (old_window != WINDOWS[i]) {
+  if (window_changed) {
     // 現在のパスを保存
     Path current_path = guide_paths[i];
     // 新しいサイズでパスを再初期化
