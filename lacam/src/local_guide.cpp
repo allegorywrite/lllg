@@ -196,12 +196,12 @@ void LocalGuide::update_window_size(const int i, const Config& Q_from) {
     if (collision_rate < COLLISION_THRESHOLD) {
       // 衝突が少ない場合はウィンドウサイズを小さくしてより短期的な計画に
       WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
-      // std::cout << "DEBUG: collision rate is low (" << collision_rate << "), decreasing window to " << WINDOWS[i] << std::endl;
+      std::cout << "DEBUG: collision rate is low (" << collision_rate << "), decreasing window to " << WINDOWS[i] << std::endl;
       window_changed = true;
     } else {
       // 衝突が多い場合はウィンドウサイズを大きくしてより長期的な計画に
       WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
-      // std::cout << "DEBUG: collision rate is high (" << collision_rate << "), increasing window to " << WINDOWS[i] << std::endl;
+      std::cout << "DEBUG: collision rate is high (" << collision_rate << "), increasing window to " << WINDOWS[i] << std::endl;
       window_changed = true;
     }
   }
@@ -283,22 +283,29 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
   auto update_guide_path = [&](const int i) {
     if (use_sipp_) {
-      // Use SIPP
-      guide_paths[i] = sipp(i, Q_from[i], ins->goals[i], D, &CT, nullptr, WINDOWS[i] -1);
-      // Ensure path has WINDOW length, padding with goal if shorter, truncating if longer
-      if (guide_paths[i].empty() && Q_from[i] != ins->goals[i]) { // if SIPP fails, use simple stay
-          for (auto t = 0; t < WINDOWS[i]; ++t) guide_paths[i].push_back(Q_from[i]);
-      } else if (guide_paths[i].empty() && Q_from[i] == ins->goals[i]) { // if SIPP returns empty for already at goal
-          for (auto t = 0; t < WINDOWS[i]; ++t) guide_paths[i].push_back(ins->goals[i]);
+      // SIPPを使用してパスを計算
+      // f_upper_boundを距離テーブルの値に基づいて設定
+      const int dist_to_goal = D->get(i, Q_from[i]);
+      const int f_upper_bound = dist_to_goal + WINDOWS[i];
+      guide_paths[i] = sipp(i, Q_from[i], ins->goals[i], D, &CT, nullptr, f_upper_bound);
+
+      // パスの処理
+      if (guide_paths[i].empty()) {
+        if (Q_from[i] == ins->goals[i]) {
+          guide_paths[i] = Path(WINDOWS[i], ins->goals[i]);
+        } else {
+          guide_paths[i] = Path(WINDOWS[i], Q_from[i]);
+        }
       } else {
-          if (guide_paths[i].size() < WINDOWS[i]) {
-              Vertex* last_node = guide_paths[i].back();
-              while (guide_paths[i].size() < WINDOWS[i]) {
-                  guide_paths[i].push_back(last_node);
-              }
-          } else if (guide_paths[i].size() > WINDOWS[i]) {
-              guide_paths[i].resize(WINDOWS[i]);
+        // パスの長さを調整
+        if (guide_paths[i].size() < WINDOWS[i]) {
+          Vertex* last_node = guide_paths[i].back();
+          while (guide_paths[i].size() < WINDOWS[i]) {
+            guide_paths[i].push_back(last_node);
           }
+        } else if (guide_paths[i].size() > WINDOWS[i]) {
+          guide_paths[i].resize(WINDOWS[i]);
+        }
       }
     } else {
       // Use space-time A* (original implementation)
