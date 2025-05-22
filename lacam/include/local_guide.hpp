@@ -70,6 +70,7 @@ struct LocalGuide {
   static float OCCUPANCY_THRESHOLD;  // 占有率の閾値
   static float COLLISION_THRESHOLD;  // 衝突量の閾値
   static float ACCESS_COUNT_THRESHOLD;  // アクセス回数の閾値
+  static float COLLISION_COST;  // 衝突コスト
 
   // guidance
   GlobalGuide* global_guide;

@@ -13,6 +13,7 @@ int LocalGuide::MAX_WINDOW = 20;
 float LocalGuide::OCCUPANCY_THRESHOLD = 0.3f;
 float LocalGuide::COLLISION_THRESHOLD = 0.5f;
 float LocalGuide::ACCESS_COUNT_THRESHOLD = 100.0f;
+float LocalGuide::COLLISION_COST = 1.0f;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -176,10 +177,10 @@ void LocalGuide::update_window_by_access_count(const int i) {
   const float avg_access_count = static_cast<float>(node_access_counts[i]) / WINDOWS[i] / WINDOWS[i];
   if (avg_access_count > ACCESS_COUNT_THRESHOLD) {
     WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
-    std::cout << "DEBUG: access count is high (" << avg_access_count << "), increasing window to " << WINDOWS[i] << std::endl;
+    // std::cout << "DEBUG: access count is high (" << avg_access_count << "), increasing window to " << WINDOWS[i] << std::endl;
   } else {
     WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
-    std::cout << "DEBUG: access count is low (" << avg_access_count << "), decreasing window to " << WINDOWS[i] << std::endl;
+    // std::cout << "DEBUG: access count is low (" << avg_access_count << "), decreasing window to " << WINDOWS[i] << std::endl;
   }
   node_access_counts[i] = 0;  // アクセス回数をリセット
 }
@@ -305,7 +306,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
             ? 0
             : CT.getCollisionCost(parent->where, where, parent->when);
     n->g = (parent == nullptr) ? 0 : parent->g + 1;
-    if (collision >= 1) n->g += 1 + collision * 1e-7;
+    if (collision >= 1) n->g += COLLISION_COST + collision * 1e-7;
 
     // h-value
     n->h = D->get(who, where);
@@ -356,11 +357,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       std::priority_queue<WSPPNode*, WSPPNodes, decltype(cmp)> OPEN(cmp);
       CLOSED_idx.clear();
       wspp_node_idx = 0;
-
-      // debug log
-      // std::cout << "update_guide_path: agent " << i << " access count is " << Q_from[i]->access_count << std::endl; 
-  
-
       // initial node
       auto n_init = get_node(i, Q_from[i], nullptr);
       OPEN.push(n_init);
@@ -370,9 +366,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         // minimum node
         auto n = OPEN.top();
         OPEN.pop();
-
-        // debug log
-        // std::cout << "update_guide_path: agent " << i << " access count is " << n->where->access_count << std::endl;
 
         // check closed
         if (CLOSED[n->when][n->where->id] != nullptr) continue;
@@ -399,36 +392,23 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
           OPEN.push(n_new);
           // アクセス回数を累積
           if (WINDOW_UPDATE_TYPE == WindowUpdateType::ACCESS_COUNT) {
-            // std::cout << "ACCESS_COUNT" << std::endl;
-            // debug log
-            // std::cout << "Expand: agent " << i << " access count is " << v->access_count-1 << std::endl;
             node_access_counts[i] += v->access_count-1;
-            // std::cout << "DEBUG: node_access_counts[i] is " << node_access_counts[i] << std::endl;
           }
         }
       }
       // clear CLOSED
       for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
     }
-    // debug log
-    // std::cout << "update_guide_path: agent " << i << " access count is " << Q_from[i]->access_count << std::endl;
   };
-
-  // std::cout << "DEBUG: construct 2" << std::endl;
 
   // create initial candidate
   for (auto i = 0; i < N; ++i) {
-    // デバッグログ
-    // std::cout << "DEBUG: guide_paths size is " << guide_paths[i].size() << std::endl;
-    // std::cout << "DEBUG: WINDOWS[i] is " << WINDOWS[i] << std::endl;
     if (Q_from[i] != guide_paths[i][1]) continue;
     for (auto t = 0; t < WINDOWS[i] - 1; ++t) {
       guide_paths[i][t] = guide_paths[i][t + 1];
     }
     CT.enrollPath(i, guide_paths[i]);
   }
-
-  // std::cout << "DEBUG: construct 3" << std::endl;
 
   // 参照軌道の改善
   for (auto k = 0; k < NUM_REFINE; ++k) {
@@ -437,24 +417,16 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       v->access_count = 0;
       std::fill(v->accessed_by_agents.begin(), v->accessed_by_agents.end(), false);
     }
-    // for (auto&& n : wspp_nodes) {
-    //     n->access_count = 0;
-    //     n->accessed_by_agents.clear();
-    //     n->accessed_by_agents.resize(N, false);
-    // }
     for (auto _i = 0; _i < N; ++_i) {
       const auto i = order[_i];
       Q_to[i] = nullptr;
       CT.clearPath(i, guide_paths[i]);
       update_guide_path(i);
-      // std::cout << "DEBUG: node_access_counts[i] is " << node_access_counts[i] << std::endl;
       CT.enrollPath(i, guide_paths[i]);
     }
     save_current_paths();
   }
-
-  // std::cout << "DEBUG: construct 4" << std::endl;
-
+  
   // post processing
   for (int i = 0; i < N; ++i) {
     Q_to[i] = guide_paths[i][1];

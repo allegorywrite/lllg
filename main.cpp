@@ -49,11 +49,15 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_min_window")
       .help("minimum window size for dynamic window")
       .scan<'d', int>()
-      .default_value(2);
+      .default_value(5);
   program.add_argument("--lg_max_window")
       .help("maximum window size for dynamic window")
       .scan<'d', int>()
       .default_value(10);
+  program.add_argument("--lg_collision_cost")
+      .help("collision cost for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(1.0f);
   program.add_argument("--lg_occupancy_threshold")
       .help("occupancy threshold for dynamic window adjustment")
       .scan<'g', float>()
@@ -125,6 +129,7 @@ int main(int argc, char *argv[])
   
   LocalGuide::MIN_WINDOW = program.get<int>("lg_min_window");
   LocalGuide::MAX_WINDOW = program.get<int>("lg_max_window");
+  LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
   LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
   LocalGuide::COLLISION_THRESHOLD = program.get<float>("lg_collision_threshold");
   LocalGuide::ACCESS_COUNT_THRESHOLD = program.get<float>("lg_access_count_threshold");
