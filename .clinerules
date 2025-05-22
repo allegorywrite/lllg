@@ -1,25 +1,28 @@
 
-## 衝突量ベースの動的Window
+## ノード混雑ベースの動的Window
 build/main -i assets/random-32-32-10-random-1.scen \
-    -m assets/random-32-32-10.map -N 200 -v 3 --lg \
-    --lg_dynamic_window --lg_use_collision_based_window \
-    --lg_collision_threshold 0.1 --lg_window 5
+    -m assets/random-32-32-10.map -N 300 -v 3 --lg \
+    --lg_dynamic_window --lg_window_update_type 0 \
+    --lg_window 5 --lg_access_count_threshold 0.1
 
-## 占有率ベースの動的Window
-build/main -i assets/random-32-32-10-random-1.scen \
-    -m assets/random-32-32-10.map -N 200 -v 3 --lg  \
-    --lg_dynamic_window --lg_occupancy_threshold 0.3 --lg_window 5
+
+## シンプルタスク
+build/main -i assets/empty-16-16-random-1.scen \
+    -m assets/empty-16-16.map -N 6 -v 3 --lg \
+    --lg_dynamic_window --lg_window_update_type 0 \
+    --lg_window 5 --lg_access_count_threshold 0.1
 
 ## local guidance
 build/main -i assets/random-32-32-10-random-1.scen \
-    -m assets/random-32-32-10.map -N 200 -v 3 --lg  --lg_window 5
+    -m assets/random-32-32-10.map -N 300 -v 3 --lg --lg_window 8
 
 ## vanilla
 build/main -i assets/random-32-32-10-random-1.scen \
-    -m assets/random-32-32-10.map -N 200 -v 3
+    -m assets/random-32-32-10.map -N 300 -v 3
 
 ### ビルド
 make -C build -j4
 
 ### 可視化
 mapf-visualizer assets/random-32-32-10.map build/result.txt
+mapf-visualizer assets/empty-16-16.map build/result.txt

@@ -39,29 +39,33 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
   program.add_argument("--lg_window").scan<'d', int>().default_value(10);
   program.add_argument("--lg_dynamic_window")
-      .help("enable dynamic window size based on occupancy")
+      .help("enable dynamic window size adjustment")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--lg_window_update_type")
+      .help("window update type (0: ACCESS_COUNT, 1: OCCUPANCY, 2: COLLISION)")
+      .scan<'d', int>()
+      .default_value(1);  // デフォルトは占有率ベース
   program.add_argument("--lg_min_window")
       .help("minimum window size for dynamic window")
       .scan<'d', int>()
-      .default_value(5);
+      .default_value(2);
   program.add_argument("--lg_max_window")
       .help("maximum window size for dynamic window")
       .scan<'d', int>()
-      .default_value(20);
+      .default_value(10);
   program.add_argument("--lg_occupancy_threshold")
       .help("occupancy threshold for dynamic window adjustment")
       .scan<'g', float>()
-      .default_value(0.1f);
-  program.add_argument("--lg_use_collision_based_window")
-      .help("enable collision-based window size adjustment")
-      .default_value(false)
-      .implicit_value(true);
+      .default_value(0.25f);
   program.add_argument("--lg_collision_threshold")
       .help("collision threshold for dynamic window adjustment")
       .scan<'g', float>()
       .default_value(0.5f);
+  program.add_argument("--lg_access_count_threshold")
+      .help("access count threshold for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(8.0f);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -101,11 +105,29 @@ int main(int argc, char *argv[])
   LocalGuide::WINDOWS.resize(ins.N, program.get<int>("lg_window"));
   LocalGuide::NUM_REFINE = program.get<int>("lg_num_refine");
   LocalGuide::DYNAMIC_WINDOW = program.get<bool>("lg_dynamic_window");
+  
+  // ウィンドウ更新タイプの設定
+  int window_update_type = program.get<int>("lg_window_update_type");
+  switch (window_update_type) {
+    case 0:
+      LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::ACCESS_COUNT;
+      break;
+    case 1:
+      LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::OCCUPANCY;
+      break;
+    case 2:
+      LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::COLLISION;
+      break;
+    default:
+      std::cerr << "Invalid window update type: " << window_update_type << std::endl;
+      std::exit(1);
+  }
+  
   LocalGuide::MIN_WINDOW = program.get<int>("lg_min_window");
   LocalGuide::MAX_WINDOW = program.get<int>("lg_max_window");
   LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
-  LocalGuide::USE_COLLISION_BASED_WINDOW = program.get<bool>("lg_use_collision_based_window");
   LocalGuide::COLLISION_THRESHOLD = program.get<float>("lg_collision_threshold");
+  LocalGuide::ACCESS_COUNT_THRESHOLD = program.get<float>("lg_access_count_threshold");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

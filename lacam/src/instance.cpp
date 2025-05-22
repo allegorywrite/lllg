@@ -12,6 +12,9 @@ Instance::Instance(Graph *_G, const Config &_starts, const Config &_goals)
       N(starts.size()),
       delete_graph_after_used(false)
 {
+  for (auto& v : G->V) {
+    v->accessed_by_agents.resize(N, false);
+  }
 }
 
 Instance::Instance(const std::string &map_filename,
@@ -23,6 +26,11 @@ Instance::Instance(const std::string &map_filename,
       N(start_indexes.size()),
       delete_graph_after_used(true)
 {
+  // 各頂点のaccessed_by_agentsを初期化
+  for (auto& v : G->V) {
+    v->accessed_by_agents.resize(N, false);
+  }
+
   for (auto k : start_indexes) starts.push_back(G->U[k]);
   for (auto k : goal_indexes) goals.push_back(G->U[k]);
 }
@@ -39,6 +47,11 @@ Instance::Instance(const std::string &scen_filename,
       N(_N),
       delete_graph_after_used(true)
 {
+  // 各頂点のaccessed_by_agentsを初期化
+  for (auto& v : G->V) {
+    v->accessed_by_agents.resize(N, false);
+  }
+
   // load start-goal pairs
   std::ifstream file(scen_filename);
   if (!file) {
@@ -78,6 +91,11 @@ Instance::Instance(const std::string &map_filename, const int _N,
       N(_N),
       delete_graph_after_used(true)
 {
+  // 各頂点のaccessed_by_agentsを初期化
+  for (auto& v : G->V) {
+    v->accessed_by_agents.resize(N, false);
+  }
+  
   auto MT = std::mt19937(seed);
   // random assignment
   const auto K = G->size();

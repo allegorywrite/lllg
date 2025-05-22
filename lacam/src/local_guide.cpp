@@ -2,15 +2,17 @@
 #include "../include/graph.hpp"  // get_x, get_y関数を使用するために追加
 #include <iostream>  // デバッグログ用
 
+// 静的メンバー変数の定義
 bool LocalGuide::ON = true;
 std::vector<int> LocalGuide::WINDOWS;  // 各エージェントのウィンドウサイズ
 int LocalGuide::NUM_REFINE = 1;
 bool LocalGuide::DYNAMIC_WINDOW = false;
-bool LocalGuide::USE_COLLISION_BASED_WINDOW = false;  // 衝突量ベースのウィンドウサイズ調整を有効にするかどうか
+WindowUpdateType LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::OCCUPANCY;  // デフォルトは占有率ベース
 int LocalGuide::MIN_WINDOW = 5;
 int LocalGuide::MAX_WINDOW = 20;
 float LocalGuide::OCCUPANCY_THRESHOLD = 0.3f;
-float LocalGuide::COLLISION_THRESHOLD = 0.5f;  // 衝突量の閾値
+float LocalGuide::COLLISION_THRESHOLD = 0.5f;
+float LocalGuide::ACCESS_COUNT_THRESHOLD = 100.0f;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -21,16 +23,17 @@ LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
     : ins(_ins),
       MT(std::mt19937(seed)),
       N(ins->N),
-      use_sipp_(_use_sipp), // Initialize use_sipp_
       V_size(ins->G->size()),
-      D(_D),
+      D(_D),                    // Dを先に初期化
+      use_sipp_(_use_sipp),    // use_sipp_を後で初期化
       CT(ins, true),
-      guide_paths(N),  // サイズは後で設定
+      guide_paths(N),          // サイズは後で設定
       guide_paths_history(),
       current_step(0),
-      CLOSED(),  // サイズは後で設定
+      CLOSED(),                // サイズは後で設定
       Q_to(N, nullptr),
-      global_guide(gg)
+      global_guide(gg),
+      node_access_counts(N, 0) // アクセス回数を0で初期化
 {
   // 各エージェントのウィンドウサイズを初期化
   WINDOWS.resize(N, 10);  // デフォルト値は10
@@ -72,7 +75,7 @@ void LocalGuide::save_current_paths()
 
 const std::vector<Path>& LocalGuide::get_paths_at_step(int step) const
 {
-  if (step < 0 || step >= guide_paths_history.size()) {
+  if (step < 0 || static_cast<size_t>(step) >= guide_paths_history.size()) {
     throw std::out_of_range("Invalid step number");
   }
   return guide_paths_history[step];
@@ -86,9 +89,6 @@ int LocalGuide::get_history_size() const
 float LocalGuide::calculate_occupancy(const int i, const Config& Q_from) {
   if (!DYNAMIC_WINDOW) return 0.0f;
 
-  // std::cout << "DEBUG: calculate_occupancy for agent " << i << std::endl;
-  // std::cout << "DEBUG: agent position: (" << Q_from[i]->x << "," << Q_from[i]->y << ")" << std::endl;
-
   const auto v = Q_from[i];
   if (v == nullptr) {
     std::cout << "ERROR: agent " << i << " position is null" << std::endl;
@@ -99,7 +99,6 @@ float LocalGuide::calculate_occupancy(const int i, const Config& Q_from) {
   int occupied = 0;
   int total = 0;
 
-  // std::cout << "DEBUG: checking grid around agent " << i << std::endl;
   // エージェントの周辺グリッドをチェック
   for (int dy = -radius; dy <= radius; ++dy) {
     for (int dx = -radius; dx <= radius; ++dx) {
@@ -108,12 +107,11 @@ float LocalGuide::calculate_occupancy(const int i, const Config& Q_from) {
       
       // マップの範囲内かチェック
       if (x < 0 || x >= ins->G->width || y < 0 || y >= ins->G->height) {
-        // std::cout << "DEBUG: out of bounds at (" << x << "," << y << ")" << std::endl;
         continue;
       }
 
       const int idx = y * ins->G->width + x;
-      if (idx < 0 || idx >= ins->G->U.size()) {
+      if (idx < 0 || static_cast<size_t>(idx) >= ins->G->U.size()) {
         std::cout << "ERROR: invalid index " << idx << " for position (" << x << "," << y << ")" << std::endl;
         continue;
       }
@@ -142,20 +140,17 @@ float LocalGuide::calculate_occupancy(const int i, const Config& Q_from) {
     }
   }
 
-  float occupancy = total > 0 ? static_cast<float>(occupied) / total : 0.0f;
-  // std::cout << "DEBUG: agent " << i << " occupancy: " << occupancy 
-  //           << " (occupied: " << occupied << ", total: " << total << ")" << std::endl;
-  return occupancy;
+  return total > 0 ? static_cast<float>(occupied) / total : 0.0f;
 }
 
 float LocalGuide::calculate_collision_rate(const int i, const Path& path) {
-  if (!USE_COLLISION_BASED_WINDOW) return 0.0f;
+  if (WINDOW_UPDATE_TYPE != WindowUpdateType::COLLISION) return 0.0f;
 
   int total_collisions = 0;
   int total_steps = 0;
 
   // パスの各ステップで衝突をチェック
-  for (int t = 0; t < path.size(); ++t) {
+  for (size_t t = 0; t < path.size(); ++t) {
     if (path[t] == nullptr) continue;
     
     // 他のエージェントとの衝突をチェック
@@ -173,37 +168,66 @@ float LocalGuide::calculate_collision_rate(const int i, const Path& path) {
   return total_steps > 0 ? static_cast<float>(total_collisions) / total_steps : 0.0f;
 }
 
+// 各判定タイプに応じたウィンドウサイズの更新処理
+void LocalGuide::update_window_by_access_count(const int i) {
+  // const float avg_access_count = static_cast<float>(node_access_counts[i]) / WINDOWS[i]
+  // debug log
+  // std::cout << "update_window_by_access_count: agent " << i << " access count is " << node_access_counts[i] << std::endl;
+  const float avg_access_count = static_cast<float>(node_access_counts[i]) / WINDOWS[i] / WINDOWS[i];
+  if (avg_access_count > ACCESS_COUNT_THRESHOLD) {
+    WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
+    std::cout << "DEBUG: access count is high (" << avg_access_count << "), increasing window to " << WINDOWS[i] << std::endl;
+  } else {
+    WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
+    std::cout << "DEBUG: access count is low (" << avg_access_count << "), decreasing window to " << WINDOWS[i] << std::endl;
+  }
+  node_access_counts[i] = 0;  // アクセス回数をリセット
+}
+
+void LocalGuide::update_window_by_occupancy(const int i, const Config& Q_from) {
+  const float occupancy = calculate_occupancy(i, Q_from);
+  if (occupancy < OCCUPANCY_THRESHOLD) {
+    WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
+    // std::cout << "DEBUG: occupancy is low (" << occupancy << "), decreasing window to " << WINDOWS[i] << std::endl;
+  } else {
+    WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
+    // std::cout << "DEBUG: occupancy is high (" << occupancy << "), increasing window to " << WINDOWS[i] << std::endl;
+  }
+}
+
+void LocalGuide::update_window_by_collision(const int i) {
+  const float collision_rate = calculate_collision_rate(i, guide_paths[i]);
+  if (collision_rate < COLLISION_THRESHOLD) {
+    WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
+    // std::cout << "DEBUG: collision rate is low (" << collision_rate << "), decreasing window to " << WINDOWS[i] << std::endl;
+  } else {
+    WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
+    // std::cout << "DEBUG: collision rate is high (" << collision_rate << "), increasing window to " << WINDOWS[i] << std::endl;
+  }
+}
+
+// ウィンドウサイズの更新処理を統合
 void LocalGuide::update_window_size(const int i, const Config& Q_from) {
   if (!DYNAMIC_WINDOW) return;
 
-  int old_window = WINDOWS[i];
   bool window_changed = false;
 
-  // 占有率ベースの調整
-  if (!USE_COLLISION_BASED_WINDOW) {
-    const float occupancy = calculate_occupancy(i, Q_from);
-    if (occupancy < OCCUPANCY_THRESHOLD) {
-      WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
+  // 判定タイプに応じた更新処理を実行
+  switch (WINDOW_UPDATE_TYPE) {
+    case WindowUpdateType::ACCESS_COUNT:
+      // std::cout << "DEBUG: update_window_by_access_count" << std::endl;
+      update_window_by_access_count(i);
+      // std::cout << "DEBUG: WINDOWS[i] is " << WINDOWS[i] << std::endl;
       window_changed = true;
-    } else {
-      WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
+      break;
+    case WindowUpdateType::OCCUPANCY:
+      update_window_by_occupancy(i, Q_from);
       window_changed = true;
-    }
-  }
-  // 衝突量ベースの調整
-  else {
-    const float collision_rate = calculate_collision_rate(i, guide_paths[i]);
-    if (collision_rate < COLLISION_THRESHOLD) {
-      // 衝突が少ない場合はウィンドウサイズを小さくしてより短期的な計画に
-      WINDOWS[i] = std::max(MIN_WINDOW, WINDOWS[i] - 1);
-      std::cout << "DEBUG: collision rate is low (" << collision_rate << "), decreasing window to " << WINDOWS[i] << std::endl;
+      break;
+    case WindowUpdateType::COLLISION:
+      update_window_by_collision(i);
       window_changed = true;
-    } else {
-      // 衝突が多い場合はウィンドウサイズを大きくしてより長期的な計画に
-      WINDOWS[i] = std::min(MAX_WINDOW, WINDOWS[i] + 1);
-      std::cout << "DEBUG: collision rate is high (" << collision_rate << "), increasing window to " << WINDOWS[i] << std::endl;
-      window_changed = true;
-    }
+      break;
   }
 
   // ウィンドウサイズが変更された場合、guide_pathsのサイズも更新
@@ -238,6 +262,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
   if (!ON || NUM_REFINE <= 0) return;
 
+  // std::cout << "DEBUG: construct" << std::endl;
+
   // 動的ウィンドウサイズの更新
   if (DYNAMIC_WINDOW) {
     for (int i = 0; i < N; ++i) {
@@ -249,6 +275,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     }
   }
 
+  // std::cout << "DEBUG: construct 1" << std::endl;
+
   auto cmp = [&](WSPPNode* a, WSPPNode* b) {
     if (a->f != b->f) return a->f > b->f;
     if (a->g != b->g) return a->g < b->g;
@@ -257,10 +285,19 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
   int wspp_node_idx = 0;
   auto get_node = [&](const int who, Vertex* where, WSPPNode* parent) {
+    // debug log
+    // std::cout << "get_node: agent " << who << " access count is " << where->access_count << std::endl;
     auto n = wspp_nodes[wspp_node_idx];
     n->when = (parent == nullptr) ? 0 : parent->when + 1;
     n->where = where;
     n->parent = parent;
+
+    // debug log
+    // std::cout << "where: accessed_by_agents[who] is " << where->accessed_by_agents[who] << std::endl;
+    if (!where->accessed_by_agents[who]) {
+      where->accessed_by_agents[who] = true;
+      where->access_count++;
+    }
 
     // g-value
     auto collision =
@@ -298,12 +335,12 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         }
       } else {
         // パスの長さを調整
-        if (guide_paths[i].size() < WINDOWS[i]) {
+        if (static_cast<int>(guide_paths[i].size()) < WINDOWS[i]) {
           Vertex* last_node = guide_paths[i].back();
-          while (guide_paths[i].size() < WINDOWS[i]) {
+          while (static_cast<int>(guide_paths[i].size()) < WINDOWS[i]) {
             guide_paths[i].push_back(last_node);
           }
-        } else if (guide_paths[i].size() > WINDOWS[i]) {
+        } else if (static_cast<int>(guide_paths[i].size()) > WINDOWS[i]) {
           guide_paths[i].resize(WINDOWS[i]);
         }
       }
@@ -320,6 +357,10 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       CLOSED_idx.clear();
       wspp_node_idx = 0;
 
+      // debug log
+      // std::cout << "update_guide_path: agent " << i << " access count is " << Q_from[i]->access_count << std::endl; 
+  
+
       // initial node
       auto n_init = get_node(i, Q_from[i], nullptr);
       OPEN.push(n_init);
@@ -329,6 +370,9 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         // minimum node
         auto n = OPEN.top();
         OPEN.pop();
+
+        // debug log
+        // std::cout << "update_guide_path: agent " << i << " access count is " << n->where->access_count << std::endl;
 
         // check closed
         if (CLOSED[n->when][n->where->id] != nullptr) continue;
@@ -351,16 +395,32 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         for (auto&& v : C) {
           const auto t = n->when + 1;
           if (CLOSED[t][v->id] != nullptr) continue;
-          OPEN.push(get_node(i, v, n));
+          auto n_new = get_node(i, v, n);
+          OPEN.push(n_new);
+          // アクセス回数を累積
+          if (WINDOW_UPDATE_TYPE == WindowUpdateType::ACCESS_COUNT) {
+            // std::cout << "ACCESS_COUNT" << std::endl;
+            // debug log
+            // std::cout << "Expand: agent " << i << " access count is " << v->access_count-1 << std::endl;
+            node_access_counts[i] += v->access_count-1;
+            // std::cout << "DEBUG: node_access_counts[i] is " << node_access_counts[i] << std::endl;
+          }
         }
       }
       // clear CLOSED
       for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
     }
+    // debug log
+    // std::cout << "update_guide_path: agent " << i << " access count is " << Q_from[i]->access_count << std::endl;
   };
+
+  // std::cout << "DEBUG: construct 2" << std::endl;
 
   // create initial candidate
   for (auto i = 0; i < N; ++i) {
+    // デバッグログ
+    // std::cout << "DEBUG: guide_paths size is " << guide_paths[i].size() << std::endl;
+    // std::cout << "DEBUG: WINDOWS[i] is " << WINDOWS[i] << std::endl;
     if (Q_from[i] != guide_paths[i][1]) continue;
     for (auto t = 0; t < WINDOWS[i] - 1; ++t) {
       guide_paths[i][t] = guide_paths[i][t + 1];
@@ -368,23 +428,40 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     CT.enrollPath(i, guide_paths[i]);
   }
 
+  // std::cout << "DEBUG: construct 3" << std::endl;
+
   // 参照軌道の改善
   for (auto k = 0; k < NUM_REFINE; ++k) {
+    // 全頂点のアクセスカウントとアクセス状態を初期化
+    for (auto& v : ins->G->V) {
+      v->access_count = 0;
+      std::fill(v->accessed_by_agents.begin(), v->accessed_by_agents.end(), false);
+    }
+    // for (auto&& n : wspp_nodes) {
+    //     n->access_count = 0;
+    //     n->accessed_by_agents.clear();
+    //     n->accessed_by_agents.resize(N, false);
+    // }
     for (auto _i = 0; _i < N; ++_i) {
       const auto i = order[_i];
       Q_to[i] = nullptr;
       CT.clearPath(i, guide_paths[i]);
       update_guide_path(i);
+      // std::cout << "DEBUG: node_access_counts[i] is " << node_access_counts[i] << std::endl;
       CT.enrollPath(i, guide_paths[i]);
     }
     save_current_paths();
   }
+
+  // std::cout << "DEBUG: construct 4" << std::endl;
 
   // post processing
   for (int i = 0; i < N; ++i) {
     Q_to[i] = guide_paths[i][1];
     CT.clearPath(i, guide_paths[i]);
   }
+
+  // std::cout << "DEBUG: construct end" << std::endl;
 }
 
 LocalHeuristic LocalGuide::get(const int i, Vertex* v)
