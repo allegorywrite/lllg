@@ -1,6 +1,6 @@
 [submodule "third_party/argparse"]
 	path = third_party/argparse
-	url = https://github.com/p-ranav/argparse.git
+	url = https://github.com/p-ranav/argparse/tree/d924b84eba1f0f0adf38b20b7b4829f6f65b6570
 [submodule "anydocgen"]
 	path = anydocgen
 	url = git@github.com:allegorywrite/anydocgen.git
