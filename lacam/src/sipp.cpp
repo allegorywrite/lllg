@@ -166,6 +166,131 @@ Path sipp(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   return solution_path;
 }
 
+// WINDOWS[i]サイズのみ探索するSIPP
+Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
+                 CollisionTable *CT, const int window_size,
+                 const Deadline *deadline)
+{
+  auto solution_path = Path();
+  auto ST = SITable(CT);  // safe interval table
+
+  // setup OPEN lists
+  auto cmpNodes = [&](SINode *a, SINode *b) {
+    if (a->f != b->f) return a->f > b->f;
+    if (a->g != b->g) return a->g < b->g;
+    if (a->time_start != b->time_start) return a->time_start > b->time_start;
+    return a->uuid < b->uuid;
+  };
+
+  int node_id = 0;
+  auto OPEN =
+      std::priority_queue<SINode *, SINodes, decltype(cmpNodes)>(cmpNodes);
+  std::unordered_map<SINode, SINode *, SINodeHasher> EXPLORED;
+  
+  // 開始ノードの安全区間を取得
+  auto &start_intervals = ST.get(s_i);
+  if (start_intervals.empty()) return solution_path;
+  
+  OPEN.push(new SINode(++node_id, start_intervals[0], s_i, 0, 0, D->get(i, s_i),
+                       nullptr));
+
+  SINode* best_node = nullptr;
+  int best_distance = INT_MAX;
+
+  // main loop
+  while (!OPEN.empty() && !is_expired(deadline)) {
+    auto n = OPEN.top();
+    OPEN.pop();
+
+    // check known node
+    auto itr_e = EXPLORED.find(*n);
+    if (itr_e != EXPLORED.end() && itr_e->second->g <= n->g) {
+      delete n;
+      continue;
+    }
+    EXPLORED[*n] = n;
+
+    // window_sizeに到達した場合、最良のノードを記録
+    if (n->t >= window_size - 1) {
+      int distance_to_goal = D->get(i, n->v);
+      if (distance_to_goal < best_distance) {
+        best_distance = distance_to_goal;
+        best_node = n;
+      }
+      continue;  // これ以上展開しない
+    }
+
+    // ゴールに到達した場合（window_size内で）
+    if (n->v == g_i) {
+      best_node = n;
+      break;
+    }
+
+    // expand neighbors
+    for (auto &u : n->v->neighbor) {
+      for (auto &si : ST.get(u)) {
+        // invalid transition
+        if (si.first > n->time_end + 1) break;
+        if (si.second <= n->time_start) continue;
+
+        // check existence of t
+        auto t_earliest = INT_MAX;
+        for (auto t = std::max(n->t, si.first - 1);
+             t <= std::min(n->time_end, si.second - 1); ++t) {
+          if (CT->getCollisionCost(n->v, u, t) == 0) {
+            t_earliest = t + 1;
+            break;
+          }
+        }
+        if (t_earliest >= INT_MAX || t_earliest >= window_size) continue;
+
+        // valid neighbor
+        auto g_val = n->g + (t_earliest - n->t);
+        auto f_val = g_val + D->get(i, u);
+        auto n_new = new SINode(++node_id, si, u, t_earliest, g_val, f_val, n);
+
+        auto itr = EXPLORED.find(*n_new);
+        if (itr != EXPLORED.end() && g_val >= itr->second->g) {
+          delete n_new;
+        } else {
+          OPEN.push(n_new);
+        }
+      }
+    }
+  }
+
+  // 最良のノードからパスを構築
+  if (best_node != nullptr) {
+    // backtrack
+    std::vector<Vertex*> temp_path;
+    auto current = best_node;
+    while (current != nullptr) {
+      temp_path.push_back(current->v);
+      current = current->parent;
+    }
+    std::reverse(temp_path.begin(), temp_path.end());
+    
+    // window_sizeに合わせてパスを調整
+    solution_path.resize(window_size);
+    for (int t = 0; t < window_size; ++t) {
+      if (t < static_cast<int>(temp_path.size())) {
+        solution_path[t] = temp_path[t];
+      } else {
+        // パスが短い場合は最後のノードで埋める
+        solution_path[t] = temp_path.back();
+      }
+    }
+  }
+
+  // memory management
+  while (!OPEN.empty()) {
+    delete OPEN.top();
+    OPEN.pop();
+  }
+  for (auto iter : EXPLORED) delete iter.second;
+  return solution_path;
+}
+
 std::ostream &operator<<(std::ostream &os, const SINode *n)
 {
   os << "f=" << std::setw(4) << n->f << ", v=" << std::setw(6) << n->v

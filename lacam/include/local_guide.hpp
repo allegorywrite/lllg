@@ -71,6 +71,9 @@ struct LocalGuide {
   static float COLLISION_THRESHOLD;  // 衝突量の閾値
   static float ACCESS_COUNT_THRESHOLD;  // アクセス回数の閾値
   static float COLLISION_COST;  // 衝突コスト
+  static float COLLISION_COST_ORDER;  // 衝突コストの係数
+  static float GLOBAL_GUIDE_FIRST_ORDER;  // グローバルガイダンスの係数
+  static float GLOBAL_GUIDE_SECOND_ORDER;  // グローバルガイダンスの係数
 
   // guidance
   GlobalGuide* global_guide;

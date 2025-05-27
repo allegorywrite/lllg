@@ -58,6 +58,18 @@ int main(int argc, char *argv[])
       .help("collision cost for dynamic window adjustment")
       .scan<'g', float>()
       .default_value(1.0f);
+  program.add_argument("--lg_collision_cost_order")
+      .help("collision cost order for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(1e-7f);
+  program.add_argument("--lg_global_guide_first_order")
+      .help("global guide first order for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(1e-2f);
+  program.add_argument("--lg_global_guide_second_order")
+      .help("global guide second order for dynamic window adjustment")
+      .scan<'g', float>()
+      .default_value(1e-4f);
   program.add_argument("--lg_occupancy_threshold")
       .help("occupancy threshold for dynamic window adjustment")
       .scan<'g', float>()
@@ -130,6 +142,9 @@ int main(int argc, char *argv[])
   LocalGuide::MIN_WINDOW = program.get<int>("lg_min_window");
   LocalGuide::MAX_WINDOW = program.get<int>("lg_max_window");
   LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
+  LocalGuide::COLLISION_COST_ORDER = program.get<float>("lg_collision_cost_order");
+  LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = program.get<float>("lg_global_guide_first_order");
+  LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = program.get<float>("lg_global_guide_second_order");
   LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
   LocalGuide::COLLISION_THRESHOLD = program.get<float>("lg_collision_threshold");
   LocalGuide::ACCESS_COUNT_THRESHOLD = program.get<float>("lg_access_count_threshold");

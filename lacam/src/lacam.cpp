@@ -160,6 +160,7 @@ Solution LaCAM::solve()
       } else {
         // replace
         OPEN.push_front(H_new);
+        EXPLORED[H_new->Q] = H_new;
         GC_HNodes.push_back(H_new);
       }
     } else {

@@ -14,6 +14,9 @@ float LocalGuide::OCCUPANCY_THRESHOLD = 0.3f;
 float LocalGuide::COLLISION_THRESHOLD = 0.5f;
 float LocalGuide::ACCESS_COUNT_THRESHOLD = 100.0f;
 float LocalGuide::COLLISION_COST = 1.0f;
+float LocalGuide::COLLISION_COST_ORDER = 1e-7;
+float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-2;
+float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-4;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -306,12 +309,12 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
             ? 0
             : CT.getCollisionCost(parent->where, where, parent->when);
     n->g = (parent == nullptr) ? 0 : parent->g + 1;
-    if (collision >= 1) n->g += COLLISION_COST + collision * 1e-7;
+    if (collision >= 1) n->g += COLLISION_COST + collision * COLLISION_COST_ORDER;
 
     // h-value
     n->h = D->get(who, where);
     auto&& gg_h = global_guide->get(who, where);
-    n->h += gg_h.first * 1e-2 + gg_h.second * 1e-4;
+    n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
 
     n->f = n->g + n->h;
     wspp_node_idx += 1;
@@ -321,11 +324,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
   auto update_guide_path = [&](const int i) {
     if (use_sipp_) {
-      // SIPPを使用してパスを計算
-      // f_upper_boundを距離テーブルの値に基づいて設定
-      const int dist_to_goal = D->get(i, Q_from[i]);
-      const int f_upper_bound = dist_to_goal + WINDOWS[i];
-      guide_paths[i] = sipp(i, Q_from[i], ins->goals[i], D, &CT, nullptr, f_upper_bound);
+      // SIPPを使用してパスを計算（ウィンドウサイズ制限付き）
+      guide_paths[i] = sipp_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
 
       // パスの処理
       if (guide_paths[i].empty()) {
@@ -334,17 +334,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         } else {
           guide_paths[i] = Path(WINDOWS[i], Q_from[i]);
         }
-      } else {
-        // パスの長さを調整
-        if (static_cast<int>(guide_paths[i].size()) < WINDOWS[i]) {
-          Vertex* last_node = guide_paths[i].back();
-          while (static_cast<int>(guide_paths[i].size()) < WINDOWS[i]) {
-            guide_paths[i].push_back(last_node);
-          }
-        } else if (static_cast<int>(guide_paths[i].size()) > WINDOWS[i]) {
-          guide_paths[i].resize(WINDOWS[i]);
-        }
       }
+      // sipp_windowは既にWINDOWS[i]サイズのパスを返すので、サイズ調整は不要
     } else {
       // Use space-time A* (original implementation)
       // special case
