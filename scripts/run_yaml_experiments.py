@@ -130,7 +130,7 @@ def parse_result(result_text):
     
     return data
 
-def plot_results(results, output_dir, vary_property):
+def plot_results(results, output_dir, vary_property, plot_settings=None):
     """結果をグラフにプロットする"""
     df = pd.DataFrame(results)
     
@@ -148,6 +148,127 @@ def plot_results(results, output_dir, vary_property):
         )
         df.dropna(subset=['soc_normalized'], inplace=True)
     
+    # プロットモードを決定
+    plot_mode = "scatter"  # デフォルト
+    if plot_settings and 'mode' in plot_settings:
+        plot_mode = plot_settings['mode']
+    
+    if plot_mode == "violin":
+        plot_violin(df, output_dir, vary_property, plot_settings)
+    else:
+        plot_scatter(df, output_dir, vary_property)
+
+def plot_violin(df, output_dir, vary_property, plot_settings):
+    """バイオリンプロットを作成する"""
+    violin_params = plot_settings.get('violin_params', {})
+    y_axis_param = violin_params.get('y_axis', 'soc')
+    orient = violin_params.get('orient', 'vertical')
+    
+    # vary_property がコラボキーかどうかを判定
+    is_collab_plot = 'collab_config_str' in df.columns and df['collab_key'].iloc[0] == vary_property if 'collab_key' in df.columns and not df.empty else False
+    
+    # グループ化に使用する列を決定
+    if is_collab_plot:
+        grouping_column = 'collab_config_str'
+        x_axis_param = grouping_column
+    else:
+        grouping_column = vary_property
+        x_axis_param = vary_property
+    
+    # データの準備
+    if grouping_column not in df.columns:
+        print(f"エラー: グループ化列 '{grouping_column}' がDataFrameに存在しません。")
+        return
+    
+    if y_axis_param not in df.columns:
+        print(f"エラー: y軸パラメータ '{y_axis_param}' がDataFrameに存在しません。")
+        return
+    
+    # データのフィルタリング
+    valid_data = df.dropna(subset=[grouping_column, y_axis_param])
+    
+    if valid_data.empty:
+        print(f"警告: 有効なデータがありません ({grouping_column}, {y_axis_param})。")
+        return
+    
+    # グループの一意値を取得
+    unique_group_values = valid_data[grouping_column].unique()
+    
+    if len(unique_group_values) < 2:
+        print(f"警告: バイオリンプロットには少なくとも2つのグループが必要です。現在のグループ数: {len(unique_group_values)}")
+        return
+    
+    # カラーパレットを設定
+    num_colors = len(unique_group_values)
+    if num_colors <= 9:
+        palette = sns.color_palette("Set1", n_colors=num_colors)
+    elif num_colors <= 10:
+        palette = sns.color_palette("tab10", n_colors=num_colors)
+    elif num_colors <= 20:
+        palette = sns.color_palette("tab20", n_colors=num_colors)
+    else: 
+        palette = sns.color_palette("husl", n_colors=num_colors)
+    
+    plt.figure(figsize=(12, 8))
+    
+    # バイオリンプロットを描画
+    if orient == 'horizontal':
+        ax = sns.violinplot(data=valid_data, x=y_axis_param, y=grouping_column, 
+                           inner=None, palette=palette)
+        plt.xlabel(get_axis_label(y_axis_param))
+        
+        # コラボプロットの場合は適切なy軸ラベルを設定
+        if is_collab_plot:
+            plt.ylabel(f"{vary_property} Configuration")
+        else:
+            plt.ylabel(get_axis_label(vary_property))
+    else:  # vertical
+        ax = sns.violinplot(data=valid_data, x=grouping_column, y=y_axis_param, 
+                           inner=None, palette=palette)
+        
+        # コラボプロットの場合は適切なx軸ラベルを設定
+        if is_collab_plot:
+            plt.xlabel(f"{vary_property} Configuration")
+        else:
+            plt.xlabel(get_axis_label(vary_property))
+        
+        plt.ylabel(get_axis_label(y_axis_param))
+        
+        # x軸のラベルを回転（読みやすくするため）
+        plt.xticks(rotation=45, ha='right')
+    
+    # タイトルを設定
+    title_x_label = f"{vary_property} Configuration" if is_collab_plot else get_axis_label(vary_property)
+    plt.title(f"Distribution of {get_axis_label(y_axis_param)} by {title_x_label}")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    # グラフを保存
+    safe_vary_property = vary_property.replace('/', '_').replace('\\', '_')  # ファイル名に安全な文字を使用
+    plot_path = os.path.join(output_dir, f"violin_{safe_vary_property}_{y_axis_param}.png")
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"バイオリンプロットを保存しました: {plot_path}")
+
+def get_axis_label(param_name):
+    """パラメータ名に対応する軸ラベルを返す"""
+    label_map = {
+        'soc': 'Sum of Costs (SoC)',
+        'soc_normalized': 'Normalized SoC (SoC/SoC_LB)',
+        'runtime': 'Runtime (ms)',
+        'comp_time_ms': 'Computation Time (ms)',
+        'use_sipp': 'Use SIPP',
+        'lg': 'Local Guidance',
+        'gg': 'Global Guidance',
+        'lg_window': 'LG Window Size',
+        'lg_collision_cost': 'LG Collision Cost',
+        'lg_collision_cost_order': 'LG Collision Cost Order',
+        'N': 'Number of Agents'
+    }
+    return label_map.get(param_name, param_name)
+
+def plot_scatter(df, output_dir, vary_property):
+    """従来の散布図プロットを作成する"""
     # シナリオとマップごとの散布図
     if vary_property: # vary_property は単独パラメータ名、またはコラボキー名
         plt.figure(figsize=(12, 8))
@@ -306,6 +427,9 @@ def main():
     
     # YAMLテンプレートの読み込み
     properties = load_yaml_template(args.template)
+    
+    # プロット設定を抽出
+    plot_settings = properties.pop('plot_settings', None)
     
     # 実験結果を保存するディレクトリを作成
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -490,7 +614,7 @@ def main():
             # plot_results に渡す vary_property は、単独パラメータの場合はその名前、
             # コラボの場合は、df内で組み合わせを識別する列名 (例: 'collab_config_str')
             # plot_results関数側で is_collab_plot フラグを使って判定する
-            plot_results(results_list, plot_output_dir, plot_key)
+            plot_results(results_list, plot_output_dir, plot_key, plot_settings)
 
 if __name__ == "__main__":
     main()
