@@ -1,6 +1,7 @@
 #include "../include/local_guide.hpp"
 #include "../include/graph.hpp"  // get_x, get_y関数を使用するために追加
 #include <iostream>  // デバッグログ用
+#include <iomanip>   // デバッグログのフォーマット用
 
 // 静的メンバー変数の定義
 bool LocalGuide::ON = true;
@@ -266,8 +267,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
   if (!ON || NUM_REFINE <= 0) return;
 
-  // std::cout << "DEBUG: construct" << std::endl;
-
   // 動的ウィンドウサイズの更新
   if (DYNAMIC_WINDOW) {
     for (int i = 0; i < N; ++i) {
@@ -278,8 +277,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       update_window_size(i, Q_from);
     }
   }
-
-  // std::cout << "DEBUG: construct 1" << std::endl;
 
   auto cmp = [&](WSPPNode* a, WSPPNode* b) {
     if (a->f != b->f) return a->f > b->f;
@@ -314,7 +311,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     // h-value
     n->h = D->get(who, where);
     auto&& gg_h = global_guide->get(who, where);
-    n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    // n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    n->g += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
 
     n->f = n->g + n->h;
     wspp_node_idx += 1;
@@ -408,6 +406,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       v->access_count = 0;
       std::fill(v->accessed_by_agents.begin(), v->accessed_by_agents.end(), false);
     }
+    
     for (auto _i = 0; _i < N; ++_i) {
       const auto i = order[_i];
       Q_to[i] = nullptr;
@@ -415,7 +414,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       update_guide_path(i);
       CT.enrollPath(i, guide_paths[i]);
     }
-    save_current_paths();
   }
   
   // post processing
@@ -423,8 +421,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     Q_to[i] = guide_paths[i][1];
     CT.clearPath(i, guide_paths[i]);
   }
-
-  // std::cout << "DEBUG: construct end" << std::endl;
 }
 
 LocalHeuristic LocalGuide::get(const int i, Vertex* v)
@@ -433,4 +429,25 @@ LocalHeuristic LocalGuide::get(const int i, Vertex* v)
     return D->get(i, v);
   if (v == Q_to[i]) return 0;
   return 1;
+}
+
+// HNodeとの連携メソッドの実装
+void LocalGuide::set_guide_paths(const std::vector<Path>& paths) {
+  if (paths.size() != static_cast<size_t>(N)) {
+    std::cerr << "ERROR: paths size mismatch in set_guide_paths" << std::endl;
+    return;
+  }
+  guide_paths = paths;
+}
+
+std::vector<Path> LocalGuide::get_current_guide_paths() const {
+  return guide_paths;
+}
+
+void LocalGuide::reconstruct_solution_paths(const std::vector<std::vector<Path>>& solution_paths) {
+  guide_paths_history.clear();
+  guide_paths_history = solution_paths;
+  current_step = solution_paths.size();
+  
+  // std::cout << "Reconstructed LocalGuide solution paths with " << current_step << " steps" << std::endl;
 }

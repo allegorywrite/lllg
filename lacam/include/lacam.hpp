@@ -47,6 +47,9 @@ struct HNode {
   std::vector<int> order;
   std::queue<LNode *> search_tree;
 
+  // LocalGuideの参照軌道を保存
+  std::vector<Path> local_guide_paths;
+
   HNode(Config _C, DistTable *D, HNode *_parent = nullptr);
   ~HNode();
 };

@@ -94,6 +94,11 @@ struct LocalGuide {
   const std::vector<Path>& get_paths_at_step(int step) const;  // 特定のステップの参照軌道を取得
   int get_history_size() const;  // 履歴のサイズを取得
 
+  // HNodeとの連携メソッド
+  void set_guide_paths(const std::vector<Path>& paths);  // HNodeから参照軌道を設定
+  std::vector<Path> get_current_guide_paths() const;     // 現在の参照軌道を取得
+  void reconstruct_solution_paths(const std::vector<std::vector<Path>>& solution_paths);  // ソリューションに対応する参照軌道を再構成
+
   // 占有率計算と動的ウィンドウサイズ調整のメソッド
   float calculate_occupancy(const int i, const Config& Q_from);  // エージェントiの周りの占有率を計算
   float calculate_collision_rate(const int i, const Path& path);  // エージェントiの参照軌道の衝突率を計算

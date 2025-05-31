@@ -9,10 +9,13 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent)
       g(parent == nullptr ? 0 : parent->g),
       priorities(Q.size()),
       order(Q.size(), 0),
-      search_tree()
+      search_tree(),
+      local_guide_paths()
 {
   search_tree.push(new LNode());
   const auto N = Q.size();
+
+  local_guide_paths.resize(N);
 
   for (auto i = 0; i < N; ++i) {
     // set priorities
@@ -174,13 +177,25 @@ Solution LaCAM::solve()
 
   // backtrack
   Solution solution;
+  std::vector<std::vector<Path>> solution_local_guide_paths;  // ソリューションに対応するLocalGuideの履歴
   {
     auto H = H_goal;
     while (H != nullptr) {
       solution.push_back(H->Q);
+      // LocalGuideの参照軌道も保存
+      if (!H->local_guide_paths.empty()) {
+        solution_local_guide_paths.push_back(H->local_guide_paths);
+      }
       H = H->parent;
     }
     std::reverse(solution.begin(), solution.end());
+    std::reverse(solution_local_guide_paths.begin(), solution_local_guide_paths.end());
+    
+    // LocalGuideの履歴を再構成
+    if (!solution_local_guide_paths.empty()) {
+      local_guide.reconstruct_solution_paths(solution_local_guide_paths);
+      solver_info(2, "reconstructed LocalGuide solution paths with ", solution_local_guide_paths.size(), " steps");
+    }
   }
 
   if (solution.empty() && OPEN.empty()) solver_info(2, "unsolvable instance");
@@ -194,6 +209,9 @@ Solution LaCAM::solve()
 bool LaCAM::set_new_config(HNode *H, LNode *L, Config &Q_to)
 {
   local_guide.construct(H->Q, H->order);
+  
+  // LocalGuideの現在の参照軌道をHNodeに保存
+  H->local_guide_paths = local_guide.get_current_guide_paths();
 
   for (auto d = 0; d < L->depth; ++d) Q_to[L->who[d]] = L->where[d];
   return pibt.set_new_config(H->Q, Q_to, H->order);
