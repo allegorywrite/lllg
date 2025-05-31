@@ -82,6 +82,30 @@ int main(int argc, char *argv[])
       .help("access count threshold for dynamic window adjustment")
       .scan<'g', float>()
       .default_value(8.0f);
+  program.add_argument("--lg_improved_heuristic")
+      .help("enable improved A* heuristic function")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_collision_sort")
+      .help("enable collision cost sorting for agent processing")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_smart_collision_sort")
+      .help("enable smart collision cost sorting (hybrid approach)")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_collision_sort_threshold")
+      .help("threshold for collision cost sorting")
+      .scan<'g', float>()
+      .default_value(1.0f);
+  program.add_argument("--lg_optimized_guidance")
+      .help("enable optimized global guidance calculation")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_early_termination")
+      .help("enable early termination when goal is reached")
+      .default_value(false)
+      .implicit_value(true);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -148,6 +172,12 @@ int main(int argc, char *argv[])
   LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
   LocalGuide::COLLISION_THRESHOLD = program.get<float>("lg_collision_threshold");
   LocalGuide::ACCESS_COUNT_THRESHOLD = program.get<float>("lg_access_count_threshold");
+  LocalGuide::ENABLE_IMPROVED_HEURISTIC = program.get<bool>("lg_improved_heuristic");
+  LocalGuide::ENABLE_COLLISION_SORT = program.get<bool>("lg_collision_sort");
+  LocalGuide::ENABLE_SMART_COLLISION_SORT = program.get<bool>("lg_smart_collision_sort");
+  LocalGuide::COLLISION_SORT_THRESHOLD = program.get<float>("lg_collision_sort_threshold");
+  LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
+  LocalGuide::ENABLE_EARLY_TERMINATION = program.get<bool>("lg_early_termination");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

@@ -18,6 +18,12 @@ float LocalGuide::COLLISION_COST = 1.0f;
 float LocalGuide::COLLISION_COST_ORDER = 1e-7;
 float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-2;
 float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-4;
+bool LocalGuide::ENABLE_IMPROVED_HEURISTIC = false;
+bool LocalGuide::ENABLE_COLLISION_SORT = false;
+bool LocalGuide::ENABLE_SMART_COLLISION_SORT = false;
+float LocalGuide::COLLISION_SORT_THRESHOLD = 1.0f;
+bool LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = false;
+bool LocalGuide::ENABLE_EARLY_TERMINATION = false;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -309,10 +315,41 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     if (collision >= 1) n->g += COLLISION_COST + collision * COLLISION_COST_ORDER;
 
     // h-value
-    n->h = D->get(who, where);
-    auto&& gg_h = global_guide->get(who, where);
-    // n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
-    n->g += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    if (ENABLE_IMPROVED_HEURISTIC) {
+      // 改善されたヒューリスティック関数: より軽量な実装
+      n->h = D->get(who, where);
+      
+      // 現在位置の衝突状況に基づいてヒューリスティックを調整
+      float collision_penalty = 0;
+      int collision_count = 0;
+      
+      // 隣接ノードの衝突をチェック（計算効率化のため制限）
+      for (auto& neighbor : where->actions) {
+        auto collision = CT.getCollisionCost(where, neighbor, n->when);
+        if (collision >= 1) {
+          collision_penalty += collision * COLLISION_COST_ORDER;
+          collision_count++;
+        }
+      }
+      
+      // 衝突が多い場所では、より保守的なヒューリスティックを使用
+      if (collision_count > 0) {
+        n->h += collision_penalty * collision_count;
+      }
+    } else {
+      n->h = D->get(who, where);
+    }
+    
+    // グローバルガイダンスの最適化された適用
+    if (ENABLE_OPTIMIZED_GUIDANCE) {
+      auto&& gg_h = global_guide->get(who, where);
+      // gに適用することでヒューリスティックの精度を向上
+      n->g += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    } else {
+      auto&& gg_h = global_guide->get(who, where);
+      // 従来通りhに適用
+      n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    }
 
     n->f = n->g + n->h;
     wspp_node_idx += 1;
@@ -370,6 +407,21 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
           }
           break;
         }
+        
+        // 早期終了条件: 目標に到達した場合
+        if (ENABLE_EARLY_TERMINATION && n->where == ins->goals[i]) {
+          // パスを構築
+          auto temp_n = n;
+          while (temp_n != nullptr) {
+            guide_paths[i][temp_n->when] = temp_n->where;
+            temp_n = temp_n->parent;
+          }
+          // 残りの時間ステップを目標で埋める
+          for (int t = n->when + 1; t < WINDOWS[i]; ++t) {
+            guide_paths[i][t] = ins->goals[i];
+          }
+          break;
+        }
 
         // expand
         auto&& C = n->where->actions;
@@ -407,12 +459,82 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       std::fill(v->accessed_by_agents.begin(), v->accessed_by_agents.end(), false);
     }
     
-    for (auto _i = 0; _i < N; ++_i) {
-      const auto i = order[_i];
-      Q_to[i] = nullptr;
-      CT.clearPath(i, guide_paths[i]);
-      update_guide_path(i);
-      CT.enrollPath(i, guide_paths[i]);
+    if (ENABLE_COLLISION_SORT || ENABLE_SMART_COLLISION_SORT) {
+      // 衝突コストでエージェントをソート
+      std::vector<std::pair<float, int>> collision_costs;
+      for (auto _i = 0; _i < N; ++_i) {
+        const auto i = order[_i];
+        float total_collision_cost = 0;
+        
+        // 現在のパスの衝突コストを計算
+        for (int t = 0; t < WINDOWS[i] - 1; ++t) {
+          if (guide_paths[i][t] != nullptr && guide_paths[i][t+1] != nullptr) {
+            auto collision = CT.getCollisionCost(guide_paths[i][t], guide_paths[i][t+1], t);
+            if (collision >= 1) {
+              total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
+            }
+          }
+        }
+        
+        collision_costs.push_back({total_collision_cost, i});
+      }
+      
+      // 衝突コストでソート（高い順）
+      std::sort(collision_costs.begin(), collision_costs.end(), 
+                [](const std::pair<float, int>& a, const std::pair<float, int>& b) {
+                  return a.first > b.first;
+                });
+      
+      if (ENABLE_SMART_COLLISION_SORT) {
+        // スマート衝突コストソート: 高い衝突コストのエージェントを限定処理後、全エージェントを処理
+        std::vector<bool> processed(N, false);
+        int max_collision_agents = std::min(N/3, 30); // 最大1/3まで、または30エージェントまで
+        int processed_count = 0;
+        
+        // 高い衝突コストのエージェントを優先処理
+        for (const auto& cost_agent : collision_costs) {
+          if (cost_agent.first <= COLLISION_SORT_THRESHOLD || processed_count >= max_collision_agents) break;
+          
+          const auto i = cost_agent.second;
+          Q_to[i] = nullptr;
+          CT.clearPath(i, guide_paths[i]);
+          update_guide_path(i);
+          CT.enrollPath(i, guide_paths[i]);
+          processed[i] = true;
+          processed_count++;
+        }
+        
+        // 残りのエージェントは元の順序で処理
+        for (auto _i = 0; _i < N; ++_i) {
+          const auto i = order[_i];
+          if (processed[i]) continue; // 既に処理済みならスキップ
+          
+          Q_to[i] = nullptr;
+          CT.clearPath(i, guide_paths[i]);
+          update_guide_path(i);
+          CT.enrollPath(i, guide_paths[i]);
+        }
+      } else {
+        // 通常の衝突コストソート: 衝突コストが0より大きいエージェントのみ処理
+        for (const auto& cost_agent : collision_costs) {
+          if (cost_agent.first <= 0) break; // 衝突コストが0以下なら処理しない
+          
+          const auto i = cost_agent.second;
+          Q_to[i] = nullptr;
+          CT.clearPath(i, guide_paths[i]);
+          update_guide_path(i);
+          CT.enrollPath(i, guide_paths[i]);
+        }
+      }
+    } else {
+      // 元の実装：エージェントオーダーに従って処理
+      for (auto _i = 0; _i < N; ++_i) {
+        const auto i = order[_i];
+        Q_to[i] = nullptr;
+        CT.clearPath(i, guide_paths[i]);
+        update_guide_path(i);
+        CT.enrollPath(i, guide_paths[i]);
+      }
     }
   }
   

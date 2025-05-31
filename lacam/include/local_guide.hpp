@@ -74,6 +74,12 @@ struct LocalGuide {
   static float COLLISION_COST_ORDER;  // 衝突コストの係数
   static float GLOBAL_GUIDE_FIRST_ORDER;  // グローバルガイダンスの係数
   static float GLOBAL_GUIDE_SECOND_ORDER;  // グローバルガイダンスの係数
+  static bool ENABLE_IMPROVED_HEURISTIC;  // 改善されたヒューリスティック関数の有効/無効
+  static bool ENABLE_COLLISION_SORT;      // 衝突コストソートの有効/無効
+  static bool ENABLE_SMART_COLLISION_SORT; // スマート衝突コストソートの有効/無効
+  static float COLLISION_SORT_THRESHOLD;   // 衝突コストソートの閾値
+  static bool ENABLE_OPTIMIZED_GUIDANCE;   // 最適化されたガイダンス計算の有効/無効
+  static bool ENABLE_EARLY_TERMINATION;    // 早期終了の有効/無効
 
   // guidance
   GlobalGuide* global_guide;
