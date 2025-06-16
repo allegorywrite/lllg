@@ -44,7 +44,8 @@ LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
       CLOSED(),                // サイズは後で設定
       Q_to(N, nullptr),
       global_guide(gg),
-      node_access_counts(N, 0) // アクセス回数を0で初期化
+      node_access_counts(N, 0), // アクセス回数を0で初期化
+      cached_collision_costs(N, 0.0f) // 衝突コストキャッシュを0で初期化
 {
   // 各エージェントのウィンドウサイズを初期化
   WINDOWS.resize(N, 10);  // デフォルト値は10
@@ -366,9 +367,23 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       if (guide_paths[i].empty()) {
         if (Q_from[i] == ins->goals[i]) {
           guide_paths[i] = Path(WINDOWS[i], ins->goals[i]);
+          cached_collision_costs[i] = 0.0f; // ゴールにいる場合は衝突コスト0
         } else {
           guide_paths[i] = Path(WINDOWS[i], Q_from[i]);
+          cached_collision_costs[i] = 0.0f; // パスが生成できない場合は衝突コスト0
         }
+      } else {
+        // SIPPで生成されたパスの衝突コストを計算
+        float total_collision_cost = 0;
+        for (int t = 0; t < WINDOWS[i] - 1; ++t) {
+          if (guide_paths[i][t] != nullptr && guide_paths[i][t+1] != nullptr) {
+            auto collision = CT.getCollisionCost(guide_paths[i][t], guide_paths[i][t+1], t);
+            if (collision >= 1) {
+              total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
+            }
+          }
+        }
+        cached_collision_costs[i] = total_collision_cost;
       }
       // sipp_windowは既にWINDOWS[i]サイズのパスを返すので、サイズ調整は不要
     } else {
@@ -376,6 +391,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       // special case
       if (Q_from[i] == ins->goals[i]) {
         for (auto t = 0; t < WINDOWS[i]; ++t) guide_paths[i][t] = Q_from[i];
+        cached_collision_costs[i] = 0.0f; // ゴールにいる場合は衝突コスト0
         return;
       }
 
@@ -400,26 +416,43 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
         // check goal condition
         if (n->when == WINDOWS[i] - 1) {
-          // register to CT
-          while (n != nullptr) {
-            guide_paths[i][n->when] = n->where;
-            n = n->parent;
+          // register to CT and calculate collision cost
+          float total_collision_cost = 0;
+          auto temp_n = n;
+          while (temp_n != nullptr) {
+            guide_paths[i][temp_n->when] = temp_n->where;
+            if (temp_n->parent != nullptr) {
+              auto collision = CT.getCollisionCost(temp_n->parent->where, temp_n->where, temp_n->parent->when);
+              if (collision >= 1) {
+                total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
+              }
+            }
+            temp_n = temp_n->parent;
           }
+          cached_collision_costs[i] = total_collision_cost;
           break;
         }
         
         // 早期終了条件: 目標に到達した場合
         if (ENABLE_EARLY_TERMINATION && n->where == ins->goals[i]) {
-          // パスを構築
+          // パスを構築して衝突コストを計算
+          float total_collision_cost = 0;
           auto temp_n = n;
           while (temp_n != nullptr) {
             guide_paths[i][temp_n->when] = temp_n->where;
+            if (temp_n->parent != nullptr) {
+              auto collision = CT.getCollisionCost(temp_n->parent->where, temp_n->where, temp_n->parent->when);
+              if (collision >= 1) {
+                total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
+              }
+            }
             temp_n = temp_n->parent;
           }
           // 残りの時間ステップを目標で埋める
           for (int t = n->when + 1; t < WINDOWS[i]; ++t) {
             guide_paths[i][t] = ins->goals[i];
           }
+          cached_collision_costs[i] = total_collision_cost;
           break;
         }
 
@@ -464,19 +497,9 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       std::vector<std::pair<float, int>> collision_costs;
       for (auto _i = 0; _i < N; ++_i) {
         const auto i = order[_i];
-        float total_collision_cost = 0;
         
-        // 現在のパスの衝突コストを計算
-        for (int t = 0; t < WINDOWS[i] - 1; ++t) {
-          if (guide_paths[i][t] != nullptr && guide_paths[i][t+1] != nullptr) {
-            auto collision = CT.getCollisionCost(guide_paths[i][t], guide_paths[i][t+1], t);
-            if (collision >= 1) {
-              total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
-            }
-          }
-        }
-        
-        collision_costs.push_back({total_collision_cost, i});
+        // キャッシュされた衝突コストを使用
+        collision_costs.push_back({cached_collision_costs[i], i});
       }
       
       // 衝突コストでソート（高い順）

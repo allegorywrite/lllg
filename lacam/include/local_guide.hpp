@@ -86,6 +86,7 @@ struct LocalGuide {
   bool use_sipp_; // Flag to use SIPP
 
   std::vector<int> node_access_counts;  // エージェントごとのノードアクセス回数の累積
+  std::vector<float> cached_collision_costs;  // A*探索時の衝突コストをキャッシュ
 
   LocalGuide(const Instance* _ins, DistTable* _D, int seed = 0,
              GlobalGuide* _global_guide = nullptr, bool _use_sipp = false);

@@ -16,4 +16,4 @@ comp_time_ms: 102   makespan: 61 (lb=53, ub=1.16)   sum_of_costs: 15536 (lb=8500
 ### ビルド
 make -C build -j4
 ### 評価
-cd ~/aist_ws/lg_lacam/ && build/main -i assets/random-32-32-20-random-1.scen -m assets/random-32-32-20.map -N 400 -v 3 --lg --lg_window 8
+cd ~/aist_ws/lg_lacam/ && build/main -i assets/random-32-32-20.map-scen-random/scen-random/random-32-32-20-random-1.scen -m assets/random-32-32-20.map -N 400 -v 3 --lg --lg_window 8
