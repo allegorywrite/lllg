@@ -202,12 +202,16 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
     num_colors = len(unique_group_values)
     if num_colors <= 9:
         palette = sns.color_palette("Set1", n_colors=num_colors)
+        box_palette = sns.color_palette("Set2", n_colors=num_colors)
     elif num_colors <= 10:
         palette = sns.color_palette("tab10", n_colors=num_colors)
+        box_palette = sns.color_palette("Paired", n_colors=num_colors)
     elif num_colors <= 20:
         palette = sns.color_palette("tab20", n_colors=num_colors)
+        box_palette = sns.color_palette("tab20b", n_colors=num_colors)
     else: 
         palette = sns.color_palette("husl", n_colors=num_colors)
+        box_palette = sns.color_palette("pastel", n_colors=num_colors)
     
     plt.figure(figsize=(12, 8))
     
@@ -215,6 +219,11 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
     if orient == 'horizontal':
         ax = sns.violinplot(data=valid_data, x=y_axis_param, y=grouping_column, 
                            inner=None, palette=palette)
+        # 箱ひげ図を重ね描き（外れ値を非表示）
+        sns.boxplot(data=valid_data, x=y_axis_param, y=grouping_column, 
+                   width=0.3, color='white', ax=ax, showfliers=False,
+                   boxprops=dict(edgecolor='black'), whiskerprops=dict(color='black'),
+                   capprops=dict(color='black'), medianprops=dict(color='black'))
         plt.xlabel(get_axis_label(y_axis_param))
         
         # コラボプロットの場合は適切なy軸ラベルを設定
@@ -225,6 +234,11 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
     else:  # vertical
         ax = sns.violinplot(data=valid_data, x=grouping_column, y=y_axis_param, 
                            inner=None, palette=palette)
+        # 箱ひげ図を重ね描き（外れ値を非表示）
+        sns.boxplot(data=valid_data, x=grouping_column, y=y_axis_param, 
+                   width=0.3, color='white', ax=ax, showfliers=False,
+                   boxprops=dict(edgecolor='black'), whiskerprops=dict(color='black'),
+                   capprops=dict(color='black'), medianprops=dict(color='black'))
         
         # コラボプロットの場合は適切なx軸ラベルを設定
         if is_collab_plot:
