@@ -59,7 +59,7 @@ v: 3
 
 # LG parameters
 lg: true
-lg_window: [15]
+lg_window: [8]
 lg_collision_sort: [true, false]
 # lg_collision_cost: [0.1, 0.5, 1.0, 2.0, 5.0]
 # lg_collision_cost_order: [true, false]
