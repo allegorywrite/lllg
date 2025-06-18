@@ -20,8 +20,6 @@ float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-2;
 float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-4;
 bool LocalGuide::ENABLE_IMPROVED_HEURISTIC = false;
 bool LocalGuide::ENABLE_COLLISION_SORT = false;
-bool LocalGuide::ENABLE_SMART_COLLISION_SORT = false;
-float LocalGuide::COLLISION_SORT_THRESHOLD = 1.0f;
 bool LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = false;
 bool LocalGuide::ENABLE_EARLY_TERMINATION = false;
 
@@ -492,7 +490,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       std::fill(v->accessed_by_agents.begin(), v->accessed_by_agents.end(), false);
     }
     
-    if (ENABLE_COLLISION_SORT || ENABLE_SMART_COLLISION_SORT) {
+    if (ENABLE_COLLISION_SORT) {
       // 衝突コストでエージェントをソート
       std::vector<std::pair<float, int>> collision_costs;
       for (auto _i = 0; _i < N; ++_i) {
@@ -508,46 +506,13 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
                   return a.first > b.first;
                 });
       
-      if (ENABLE_SMART_COLLISION_SORT) {
-        // スマート衝突コストソート: 高い衝突コストのエージェントを限定処理後、全エージェントを処理
-        std::vector<bool> processed(N, false);
-        int max_collision_agents = std::min(N/3, 30); // 最大1/3まで、または30エージェントまで
-        int processed_count = 0;
-        
-        // 高い衝突コストのエージェントを優先処理
-        for (const auto& cost_agent : collision_costs) {
-          if (cost_agent.first <= COLLISION_SORT_THRESHOLD || processed_count >= max_collision_agents) break;
-          
-          const auto i = cost_agent.second;
-          Q_to[i] = nullptr;
-          CT.clearPath(i, guide_paths[i]);
-          update_guide_path(i);
-          CT.enrollPath(i, guide_paths[i]);
-          processed[i] = true;
-          processed_count++;
-        }
-        
-        // 残りのエージェントは元の順序で処理
-        for (auto _i = 0; _i < N; ++_i) {
-          const auto i = order[_i];
-          if (processed[i]) continue; // 既に処理済みならスキップ
-          
-          Q_to[i] = nullptr;
-          CT.clearPath(i, guide_paths[i]);
-          update_guide_path(i);
-          CT.enrollPath(i, guide_paths[i]);
-        }
-      } else {
-        // 通常の衝突コストソート: 衝突コストが0より大きいエージェントのみ処理
-        for (const auto& cost_agent : collision_costs) {
-          if (cost_agent.first <= 0) break; // 衝突コストが0以下なら処理しない
-          
-          const auto i = cost_agent.second;
-          Q_to[i] = nullptr;
-          CT.clearPath(i, guide_paths[i]);
-          update_guide_path(i);
-          CT.enrollPath(i, guide_paths[i]);
-        }
+      // 衝突コストソート: 衝突コストが高い順にすべてのエージェントを処理
+      for (const auto& cost_agent : collision_costs) {
+        const auto i = cost_agent.second;
+        Q_to[i] = nullptr;
+        CT.clearPath(i, guide_paths[i]);
+        update_guide_path(i);
+        CT.enrollPath(i, guide_paths[i]);
       }
     } else {
       // 元の実装：エージェントオーダーに従って処理

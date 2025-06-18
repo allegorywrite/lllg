@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_max_window")
       .help("maximum window size for dynamic window")
       .scan<'d', int>()
-      .default_value(10);
+      .default_value(20);
   program.add_argument("--lg_collision_cost")
       .help("collision cost for dynamic window adjustment")
       .scan<'g', float>()
@@ -87,17 +87,9 @@ int main(int argc, char *argv[])
       .default_value(false)
       .implicit_value(true);
   program.add_argument("--lg_collision_sort")
-      .help("enable collision cost sorting for agent processing")
+      .help("enable collision cost sorting for agent processing (high collision cost agents first)")
       .default_value(false)
       .implicit_value(true);
-  program.add_argument("--lg_smart_collision_sort")
-      .help("enable smart collision cost sorting (hybrid approach)")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_collision_sort_threshold")
-      .help("threshold for collision cost sorting")
-      .scan<'g', float>()
-      .default_value(1.0f);
   program.add_argument("--lg_optimized_guidance")
       .help("enable optimized global guidance calculation")
       .default_value(false)
@@ -174,8 +166,6 @@ int main(int argc, char *argv[])
   LocalGuide::ACCESS_COUNT_THRESHOLD = program.get<float>("lg_access_count_threshold");
   LocalGuide::ENABLE_IMPROVED_HEURISTIC = program.get<bool>("lg_improved_heuristic");
   LocalGuide::ENABLE_COLLISION_SORT = program.get<bool>("lg_collision_sort");
-  LocalGuide::ENABLE_SMART_COLLISION_SORT = program.get<bool>("lg_smart_collision_sort");
-  LocalGuide::COLLISION_SORT_THRESHOLD = program.get<float>("lg_collision_sort_threshold");
   LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
   LocalGuide::ENABLE_EARLY_TERMINATION = program.get<bool>("lg_early_termination");
 
