@@ -12,26 +12,39 @@ CollisionTable::CollisionTable(const Instance *ins, bool _no_use_collision_cnt)
 CollisionTable::~CollisionTable() {}
 
 int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
-                                     const int t_from)
+                                     const int t_from, const int exclude_agent)
 {
   const int t_to = t_from + 1;
   auto collision = 0;
+  
   // vertex collision
   if (t_to < body[v_to->id].size()) {
-    collision += body[v_to->id][t_to].size();
+    for (auto agent : body[v_to->id][t_to]) {
+      if (agent != exclude_agent) {  // 除外エージェントをスキップ
+        collision++;
+      }
+    }
   }
+  
   // edge collision
   if (t_to < body[v_from->id].size() && t_from < body[v_to->id].size()) {
     for (auto j : body[v_from->id][t_to]) {
       for (auto k : body[v_to->id][t_from]) {
-        if (j == k) ++collision;
+        if (j == k && j != exclude_agent) {  // 除外エージェントをスキップ
+          ++collision;
+        }
       }
     }
   }
+  
   // goal collision
   for (auto last_timestep : body_last[v_to->id]) {
-    if (t_to > last_timestep) ++collision;
+    if (t_to > last_timestep) {
+      // ここではゴール衝突の除外エージェント確認は複雑なので、簡略化
+      ++collision;
+    }
   }
+  
   return collision;
 }
 

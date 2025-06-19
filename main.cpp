@@ -98,6 +98,10 @@ int main(int argc, char *argv[])
       .help("enable early termination when goal is reached")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--lg_readonly_parallel_update")
+      .help("enable read-only parallel update_guide_path processing")
+      .default_value(false)
+      .implicit_value(true);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -168,6 +172,7 @@ int main(int argc, char *argv[])
   LocalGuide::ENABLE_COLLISION_SORT = program.get<bool>("lg_collision_sort");
   LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
   LocalGuide::ENABLE_EARLY_TERMINATION = program.get<bool>("lg_early_termination");
+  LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = program.get<bool>("lg_readonly_parallel_update");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

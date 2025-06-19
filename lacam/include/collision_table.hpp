@@ -19,7 +19,7 @@ struct CollisionTable {
   ~CollisionTable();
 
   int getCollisionCost(const Vertex *v_from, const Vertex *v_to,
-                       const int t_from);
+                       const int t_from, const int exclude_agent = -1);
   void enrollPath(const int i, Path &path);
   void clearPath(const int i, Path &path);
 };
