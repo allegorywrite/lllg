@@ -26,6 +26,7 @@ bool LocalGuide::ENABLE_COLLISION_SORT = false;
 bool LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = false;
 bool LocalGuide::ENABLE_EARLY_TERMINATION = false;
 bool LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = true;
+bool LocalGuide::USE_SOFT_SIPP = false;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -486,7 +487,11 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   auto update_guide_path = [&](const int i) {
     if (use_sipp_) {
       // SIPPを使用してパスを計算（ウィンドウサイズ制限付き）
-      guide_paths[i] = sipp_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
+      if (USE_SOFT_SIPP) {
+        guide_paths[i] = sipps_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
+      } else {
+        guide_paths[i] = sipp_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
+      }
 
       // パスの処理
       if (guide_paths[i].empty()) {
@@ -619,8 +624,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       std::fill(v->accessed_by_agents.begin(), v->accessed_by_agents.end(), false);
     }
     
-    std::cout << "DEBUG: Refine iteration " << k << ", NUM_REFINE=" << NUM_REFINE 
-              << ", ENABLE_READONLY_PARALLEL_UPDATE=" << ENABLE_READONLY_PARALLEL_UPDATE << std::endl;
+    // std::cout << "DEBUG: Refine iteration " << k << ", NUM_REFINE=" << NUM_REFINE 
+    //           << ", ENABLE_READONLY_PARALLEL_UPDATE=" << ENABLE_READONLY_PARALLEL_UPDATE << std::endl;
     
     if (ENABLE_READONLY_PARALLEL_UPDATE) {
       // CLAUDE.mdの指示に従った実装:

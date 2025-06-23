@@ -112,6 +112,10 @@ int main(int argc, char *argv[])
       .help("use SIPP for local guide")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--use_soft_sipp")
+      .help("use soft constraint SIPP (SIPPS) for local guide")
+      .default_value(false)
+      .implicit_value(true);
 
   try {
     program.parse_args(argc, argv);
@@ -173,6 +177,7 @@ int main(int argc, char *argv[])
   LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
   LocalGuide::ENABLE_EARLY_TERMINATION = program.get<bool>("lg_early_termination");
   LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = program.get<bool>("lg_readonly_parallel_update");
+  LocalGuide::USE_SOFT_SIPP = program.get<bool>("use_soft_sipp");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

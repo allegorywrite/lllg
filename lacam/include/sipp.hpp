@@ -57,4 +57,9 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
                  CollisionTable *CT, const int window_size,
                  const Deadline *deadline = nullptr);
 
+// SIPPS: SIPP with soft constraints (based on AAAI22 paper)
+Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
+                  CollisionTable *CT, const int window_size,
+                  const Deadline *deadline = nullptr);
+
 std::ostream &operator<<(std::ostream &os, const SINode *n);

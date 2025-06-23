@@ -82,6 +82,7 @@ struct LocalGuide {
   static bool ENABLE_OPTIMIZED_GUIDANCE;   // 最適化されたガイダンス計算の有効/無効
   static bool ENABLE_EARLY_TERMINATION;    // 早期終了の有効/無効
   static bool ENABLE_READONLY_PARALLEL_UPDATE; // 読み取り専用並列update_guide_pathの有効/無効
+  static bool USE_SOFT_SIPP;               // ソフト制約SIPP (SIPPS) の使用フラグ
 
   // guidance
   GlobalGuide* global_guide;

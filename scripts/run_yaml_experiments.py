@@ -130,7 +130,7 @@ def parse_result(result_text):
     
     return data
 
-def plot_results(results, output_dir, vary_property, plot_settings=None):
+def plot_results(results, output_dir, vary_property, plot_settings=None, baseline_data=None):
     """結果をグラフにプロットする"""
     df = pd.DataFrame(results)
     
@@ -153,12 +153,14 @@ def plot_results(results, output_dir, vary_property, plot_settings=None):
     if plot_settings and 'mode' in plot_settings:
         plot_mode = plot_settings['mode']
     
-    if plot_mode == "violin":
-        plot_violin(df, output_dir, vary_property, plot_settings)
-    else:
-        plot_scatter(df, output_dir, vary_property)
+    # if plot_mode == "violin":
+    #     plot_violin(df, output_dir, vary_property, plot_settings, baseline_data)
+    # else:
+    #     plot_scatter(df, output_dir, vary_property, baseline_data)
+    plot_violin(df, output_dir, vary_property, plot_settings, baseline_data)
+    plot_scatter(df, output_dir, vary_property, baseline_data)
 
-def plot_violin(df, output_dir, vary_property, plot_settings):
+def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None):
     """バイオリンプロットを作成する"""
     violin_params = plot_settings.get('violin_params', {})
     y_axis_param = violin_params.get('y_axis', 'soc')
@@ -170,10 +172,68 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
     # グループ化に使用する列を決定
     if is_collab_plot:
         grouping_column = 'collab_config_str'
-        x_axis_param = grouping_column
     else:
         grouping_column = vary_property
-        x_axis_param = vary_property
+    
+    # ベースラインデータをDataFrameに統合
+    if baseline_data and len(baseline_data) > 0:
+        all_baseline_dfs = []
+        
+        # baseline_dataが辞書の場合（複数のベースライン）
+        if isinstance(baseline_data, dict):
+            for baseline_name, baseline_list in baseline_data.items():
+                if baseline_list and len(baseline_list) > 0:
+                    baseline_df = pd.DataFrame(baseline_list)
+                    # 数値型に変換
+                    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+                        if col in baseline_df.columns:
+                            baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
+                    
+                    # 正規化したSOCを計算
+                    if 'soc' in baseline_df.columns and 'soc_lb' in baseline_df.columns:
+                        baseline_df['soc_normalized'] = np.where(
+                            (baseline_df['soc_lb'] > 0),
+                            baseline_df['soc'] / baseline_df['soc_lb'],
+                            np.nan
+                        )
+                    
+                    # ベースラインデータにグループ化列を追加
+                    if is_collab_plot:
+                        baseline_df['collab_config_str'] = baseline_name
+                        baseline_df['collab_key'] = vary_property
+                    else:
+                        baseline_df[vary_property] = baseline_name
+                    
+                    all_baseline_dfs.append(baseline_df)
+        else:
+            # 旧形式（リスト）の場合
+            baseline_df = pd.DataFrame(baseline_data)
+            # 数値型に変換
+            for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+                if col in baseline_df.columns:
+                    baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
+            
+            # 正規化したSOCを計算
+            if 'soc' in baseline_df.columns and 'soc_lb' in baseline_df.columns:
+                baseline_df['soc_normalized'] = np.where(
+                    (baseline_df['soc_lb'] > 0),
+                    baseline_df['soc'] / baseline_df['soc_lb'],
+                    np.nan
+                )
+            
+            # ベースラインデータにグループ化列を追加
+            if is_collab_plot:
+                baseline_df['collab_config_str'] = 'Baseline'
+                baseline_df['collab_key'] = vary_property
+            else:
+                baseline_df[vary_property] = 'Baseline'
+            
+            all_baseline_dfs.append(baseline_df)
+        
+        # ベースラインデータをメインデータに統合
+        if all_baseline_dfs:
+            all_baseline_df = pd.concat(all_baseline_dfs, ignore_index=True)
+            df = pd.concat([df, all_baseline_df], ignore_index=True)
     
     # データの準備
     if grouping_column not in df.columns:
@@ -194,24 +254,58 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
     # グループの一意値を取得
     unique_group_values = valid_data[grouping_column].unique()
     
-    if len(unique_group_values) < 2:
-        print(f"警告: バイオリンプロットには少なくとも2つのグループが必要です。現在のグループ数: {len(unique_group_values)}")
+    if len(unique_group_values) < 1:
+        print(f"警告: 有効なグループがありません。")
         return
     
-    # カラーパレットを設定
+    # カラーパレットを設定（ベースラインがある場合は赤色を予約）
     num_colors = len(unique_group_values)
-    if num_colors <= 9:
-        palette = sns.color_palette("Set1", n_colors=num_colors)
-        box_palette = sns.color_palette("Set2", n_colors=num_colors)
-    elif num_colors <= 10:
-        palette = sns.color_palette("tab10", n_colors=num_colors)
-        box_palette = sns.color_palette("Paired", n_colors=num_colors)
-    elif num_colors <= 20:
-        palette = sns.color_palette("tab20", n_colors=num_colors)
-        box_palette = sns.color_palette("tab20b", n_colors=num_colors)
-    else: 
-        palette = sns.color_palette("husl", n_colors=num_colors)
-        box_palette = sns.color_palette("pastel", n_colors=num_colors)
+    baseline_color = None
+    
+    # ベースライン用の色を予約
+    baseline_values = [val for val in unique_group_values if isinstance(val, str) and val.startswith('baseline_')]
+    other_values = [val for val in unique_group_values if not (isinstance(val, str) and val.startswith('baseline_'))]
+    
+    # ベースラインがある場合の色設定
+    if baseline_values:
+        # ベースライン用の色（赤系統）
+        baseline_colors = ['red', 'darkred', 'crimson', 'firebrick', 'indianred']
+        
+        # 他の値用の色
+        num_other_colors = len(other_values)
+        if num_other_colors <= 8:
+            other_palette = sns.color_palette("Set1", n_colors=num_other_colors)
+        elif num_other_colors <= 9:
+            other_palette = sns.color_palette("tab10", n_colors=num_other_colors)
+        elif num_other_colors <= 19:
+            other_palette = sns.color_palette("tab20", n_colors=num_other_colors)
+        else: 
+            other_palette = sns.color_palette("husl", n_colors=num_other_colors)
+        
+        # パレットを作成
+        palette = []
+        baseline_idx = 0
+        other_idx = 0
+        for val in unique_group_values:
+            if isinstance(val, str) and val.startswith('baseline_'):
+                if baseline_idx < len(baseline_colors):
+                    palette.append(baseline_colors[baseline_idx])
+                else:
+                    palette.append('red')  # デフォルトで赤
+                baseline_idx += 1
+            else:
+                palette.append(other_palette[other_idx])
+                other_idx += 1
+    else:
+        # ベースラインがない場合は通常の色設定
+        if num_colors <= 9:
+            palette = sns.color_palette("Set1", n_colors=num_colors)
+        elif num_colors <= 10:
+            palette = sns.color_palette("tab10", n_colors=num_colors)
+        elif num_colors <= 20:
+            palette = sns.color_palette("tab20", n_colors=num_colors)
+        else: 
+            palette = sns.color_palette("husl", n_colors=num_colors)
     
     plt.figure(figsize=(12, 8))
     
@@ -224,6 +318,9 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
                    width=0.3, color='white', ax=ax, showfliers=False,
                    boxprops=dict(edgecolor='black'), whiskerprops=dict(color='black'),
                    capprops=dict(color='black'), medianprops=dict(color='black'))
+        
+        # Remove baseline scatter points from violin plot
+        
         plt.xlabel(get_axis_label(y_axis_param))
         
         # コラボプロットの場合は適切なy軸ラベルを設定
@@ -239,6 +336,8 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
                    width=0.3, color='white', ax=ax, showfliers=False,
                    boxprops=dict(edgecolor='black'), whiskerprops=dict(color='black'),
                    capprops=dict(color='black'), medianprops=dict(color='black'))
+        
+        # Remove baseline scatter points from violin plot
         
         # コラボプロットの場合は適切なx軸ラベルを設定
         if is_collab_plot:
@@ -264,6 +363,8 @@ def plot_violin(df, output_dir, vary_property, plot_settings):
     plt.close()
     print(f"バイオリンプロットを保存しました: {plot_path}")
 
+# Function removed - baseline scatter points no longer added to violin plots
+
 def get_axis_label(param_name):
     """パラメータ名に対応する軸ラベルを返す"""
     label_map = {
@@ -281,7 +382,7 @@ def get_axis_label(param_name):
     }
     return label_map.get(param_name, param_name)
 
-def plot_scatter(df, output_dir, vary_property):
+def plot_scatter(df, output_dir, vary_property, baseline_data=None):
     """従来の散布図プロットを作成する"""
     # シナリオとマップごとの散布図
     if vary_property: # vary_property は単独パラメータ名、またはコラボキー名
@@ -322,6 +423,66 @@ def plot_scatter(df, output_dir, vary_property):
         # 使用するデータ列を決定
         x_col = 'runtime' if 'runtime' in df.columns else 'comp_time_ms'
         y_col = 'soc_normalized' if 'soc_normalized' in df.columns else 'soc'
+        
+        # ベースラインデータの処理
+        baseline_data_processed = {}
+        if baseline_data and len(baseline_data) > 0:
+            # baseline_dataが辞書の場合（複数のベースライン）
+            if isinstance(baseline_data, dict):
+                for baseline_name, baseline_list in baseline_data.items():
+                    if baseline_list and len(baseline_list) > 0:
+                        baseline_df = pd.DataFrame(baseline_list)
+                        # 数値型に変換
+                        for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+                            if col in baseline_df.columns:
+                                baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
+                        
+                        # 正規化したSOCを計算
+                        if 'soc' in baseline_df.columns and 'soc_lb' in baseline_df.columns:
+                            baseline_df['soc_normalized'] = np.where(
+                                (baseline_df['soc_lb'] > 0),
+                                baseline_df['soc'] / baseline_df['soc_lb'],
+                                np.nan
+                            )
+                        
+                        baseline_x_values = []
+                        baseline_y_values = []
+                        if x_col in baseline_df.columns:
+                            baseline_x_values = baseline_df[x_col].dropna().tolist()
+                        if y_col in baseline_df.columns:
+                            baseline_y_values = baseline_df[y_col].dropna().tolist()
+                        
+                        baseline_data_processed[baseline_name] = {
+                            'x_values': baseline_x_values,
+                            'y_values': baseline_y_values
+                        }
+            else:
+                # 旧形式（リスト）の場合
+                baseline_df = pd.DataFrame(baseline_data)
+                # 数値型に変換
+                for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+                    if col in baseline_df.columns:
+                        baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
+                
+                # 正規化したSOCを計算
+                if 'soc' in baseline_df.columns and 'soc_lb' in baseline_df.columns:
+                    baseline_df['soc_normalized'] = np.where(
+                        (baseline_df['soc_lb'] > 0),
+                        baseline_df['soc'] / baseline_df['soc_lb'],
+                        np.nan
+                    )
+                
+                baseline_x_values = []
+                baseline_y_values = []
+                if x_col in baseline_df.columns:
+                    baseline_x_values = baseline_df[x_col].dropna().tolist()
+                if y_col in baseline_df.columns:
+                    baseline_y_values = baseline_df[y_col].dropna().tolist()
+                
+                baseline_data_processed['Baseline'] = {
+                    'x_values': baseline_x_values,
+                    'y_values': baseline_y_values
+                }
         
         for group_val in unique_group_values:
             subset = df[df[grouping_column] == group_val]
@@ -402,6 +563,76 @@ def plot_scatter(df, output_dir, vary_property):
                                      edgecolor=color_map[group_val], linestyle='--') # value を group_val に変更
                     ax.add_patch(ellipse)
         
+        # 各ベースラインアイテムを他のitemと同じスタイルでプロット
+        # 既存のカラーパレットを拡張してベースラインにも適用
+        all_group_values = list(unique_group_values) + list(baseline_data_processed.keys())
+        total_colors = len(all_group_values)
+        
+        if total_colors <= 9:
+            extended_palette = sns.color_palette("Set1", n_colors=total_colors)
+        elif total_colors <= 10:
+            extended_palette = sns.color_palette("tab10", n_colors=total_colors)
+        elif total_colors <= 20:
+            extended_palette = sns.color_palette("tab20", n_colors=total_colors)
+        else: 
+            extended_palette = sns.color_palette("husl", n_colors=total_colors)
+        
+        # ベースライン用のカラーマップを作成
+        baseline_color_map = {}
+        baseline_start_idx = len(unique_group_values)
+        for i, baseline_name in enumerate(baseline_data_processed.keys()):
+            baseline_color_map[baseline_name] = extended_palette[baseline_start_idx + i]
+        
+        for baseline_name, baseline_info in baseline_data_processed.items():
+            baseline_x_values = baseline_info['x_values']
+            baseline_y_values = baseline_info['y_values']
+            
+            if baseline_x_values and baseline_y_values:
+                color = baseline_color_map[baseline_name]
+                
+                # 各ベースラインポイントを通常のスタイルでプロット
+                plt.scatter(baseline_x_values, baseline_y_values, 
+                          label=baseline_name, color=color, alpha=0.7, s=50)
+                
+                # 十分なデータポイントがある場合、楕円と重心をプロット
+                if len(baseline_x_values) >= 2:
+                    # 重心
+                    centroid_x = np.mean(baseline_x_values)
+                    centroid_y = np.mean(baseline_y_values)
+                    plt.scatter(centroid_x, centroid_y, marker='X', s=100, 
+                               color=color, edgecolor='black', zorder=5)
+                    
+                    # 楕円（信頼区間）
+                    if len(baseline_x_values) >= 3:
+                        x_vals = np.array(baseline_x_values)
+                        y_vals = np.array(baseline_y_values)
+                        
+                        # x, yの標準偏差が0に近い場合はスキップ
+                        if not (np.isclose(np.std(x_vals), 0) or np.isclose(np.std(y_vals), 0)):
+                            cov = np.cov(x_vals, y_vals)
+                            
+                            # 共分散行列が有効な場合のみ楕円を描画
+                            if not (np.any(np.isnan(cov)) or np.any(np.isinf(cov))):
+                                try:
+                                    eigenvalues, eigenvectors = np.linalg.eig(cov)
+                                    eigenvalues = np.maximum(eigenvalues, 0)
+                                    order = eigenvalues.argsort()[::-1]
+                                    eigenvalues = eigenvalues[order]
+                                    eigenvectors = eigenvectors[:,order]
+                                    
+                                    angle = np.degrees(np.arctan2(*eigenvectors[:,0][::-1]))
+                                    n_std = 2
+                                    width, height = 2 * n_std * np.sqrt(eigenvalues)
+                                    
+                                    ellipse = Ellipse(xy=(centroid_x, centroid_y),
+                                                     width=width, height=height,
+                                                     angle=angle,
+                                                     facecolor=color, alpha=0.2,
+                                                     edgecolor=color, linestyle='--')
+                                    ax.add_patch(ellipse)
+                                except np.linalg.LinAlgError:
+                                    pass  # 楕円描画をスキップ
+        
         # y_colに基づいてタイトルと軸ラベルを設定
         if y_col == 'soc_normalized':
             plt.title(f"Normalized SOC vs Computation Time (by {vary_property})") # 日本語を英語に変更
@@ -417,7 +648,7 @@ def plot_scatter(df, output_dir, vary_property):
         handles, labels = ax.get_legend_handles_labels()
         unique_labels_dict = {}
         for handle, label in zip(handles, labels):
-            if label not in unique_labels_dict:
+            if label and label not in unique_labels_dict:  # 空のラベルを除外
                 unique_labels_dict[label] = handle
         
         if unique_labels_dict:
@@ -444,6 +675,18 @@ def main():
     
     # プロット設定を抽出
     plot_settings = properties.pop('plot_settings', None)
+    
+    # ベースライン設定を抽出（baseline_で始まるすべてのキー）
+    baseline_configs = {}
+    keys_to_remove = []
+    for key, value in properties.items():
+        if isinstance(key, str) and key.startswith('baseline_'):
+            baseline_configs[key] = value
+            keys_to_remove.append(key)
+    
+    # baseline_で始まるキーを削除
+    for key in keys_to_remove:
+        properties.pop(key)
     
     # 実験結果を保存するディレクトリを作成
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -492,6 +735,7 @@ def main():
 
     # 結果を格納する辞書
     all_results_for_plotting = {} # キーは single_param_name または collab_key
+    baseline_results = {} # ベースライン結果を格納（キー: baseline名, 値: 結果リスト）
 
     # 1. 単独で変化するパラメータの組み合わせを生成 (コラボで使われるものは除外済み)
     single_param_names = list(single_varying_params.keys())
@@ -512,6 +756,44 @@ def main():
     # 各シナリオとマップの組み合わせに対して実行
     for i, (scenario, map_file) in enumerate(zip(scenario_files, map_files)):
         print(f"\n実験 {i+1}/{len(scenario_files)}: シナリオ={scenario}, マップ={map_file}")
+        
+        # --- 0. ベースライン実験の実行 ---
+        for baseline_name, baseline_config in baseline_configs.items():
+            print(f"{baseline_name}実験を実行中...")
+            baseline_props = fixed_params_from_yaml.copy()
+            baseline_props['i'] = scenario
+            baseline_props['m'] = map_file
+            baseline_props.update(baseline_config)
+            
+            # 他のパラメータの初期値を設定
+            for sp_key, sp_values_list in single_varying_params.items():
+                if sp_key not in baseline_props:
+                    baseline_props[sp_key] = sp_values_list[0]
+            
+            for collab_def_key, collab_def_details in collab_definitions.items():
+                for collab_prop_name_in_def in collab_def_details['properties']:
+                    if collab_prop_name_in_def not in baseline_props and collab_prop_name_in_def in properties and isinstance(properties[collab_prop_name_in_def], list):
+                        baseline_props[collab_prop_name_in_def] = properties[collab_prop_name_in_def][0]
+            
+            num_agents = baseline_props.get('N', 0)
+            scenario_id_for_file = os.path.basename(scenario).split('.')[0]
+            baseline_output_dir = os.path.join(base_output_dir, baseline_name)
+            os.makedirs(baseline_output_dir, exist_ok=True)
+            
+            result_filename = f"result_{scenario_id_for_file}_N{num_agents}_{baseline_name}.txt"
+            result_path = os.path.join(baseline_output_dir, result_filename)
+            
+            cmd = create_command(baseline_props, result_path)
+            print(f"実行コマンド ({baseline_name}): {' '.join(cmd)}")
+            result_text = run_experiment(cmd, baseline_output_dir, baseline_props, f"{scenario_id_for_file}_{baseline_name}")
+            
+            if result_text:
+                result_data = parse_result(result_text)
+                result_data.update(baseline_props)
+                result_data['experiment_type'] = baseline_name
+                if baseline_name not in baseline_results:
+                    baseline_results[baseline_name] = []
+                baseline_results[baseline_name].append(result_data)
 
         # --- 1. 単独パラメータのプロットのための実験実行とデータ収集 ---
         for p_name_to_plot in single_param_names:
@@ -628,7 +910,7 @@ def main():
             # plot_results に渡す vary_property は、単独パラメータの場合はその名前、
             # コラボの場合は、df内で組み合わせを識別する列名 (例: 'collab_config_str')
             # plot_results関数側で is_collab_plot フラグを使って判定する
-            plot_results(results_list, plot_output_dir, plot_key, plot_settings)
+            plot_results(results_list, plot_output_dir, plot_key, plot_settings, baseline_results)
 
 if __name__ == "__main__":
     main()
