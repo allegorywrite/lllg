@@ -102,6 +102,10 @@ int main(int argc, char *argv[])
       .help("enable read-only parallel update_guide_path processing")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--lg_grid_partition_size")
+      .help("NxN grid partition size for parallel processing")
+      .scan<'d', int>()
+      .default_value(2);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -178,6 +182,7 @@ int main(int argc, char *argv[])
   LocalGuide::ENABLE_EARLY_TERMINATION = program.get<bool>("lg_early_termination");
   LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = program.get<bool>("lg_readonly_parallel_update");
   LocalGuide::USE_SOFT_SIPP = program.get<bool>("use_soft_sipp");
+  LocalGuide::GRID_PARTITION_SIZE = program.get<int>("lg_grid_partition_size");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

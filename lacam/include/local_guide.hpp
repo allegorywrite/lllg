@@ -53,6 +53,8 @@ struct LocalGuide {
   
   // 並列計算用のヘルパー関数
   Path computeGuidePath(int agent_id, const Config& Q_from);
+  Path computeGuidePathCorrect(int agent_id, const Config& Q_from);
+  Path computeGuidePathWithCT(int agent_id, const Config& Q_from, CollisionTable& ct);
 
   // 参照軌道の履歴を保存
   std::vector<std::vector<Path>> guide_paths_history;  // 各ステップでの参照軌道の履歴
@@ -83,6 +85,7 @@ struct LocalGuide {
   static bool ENABLE_EARLY_TERMINATION;    // 早期終了の有効/無効
   static bool ENABLE_READONLY_PARALLEL_UPDATE; // 読み取り専用並列update_guide_pathの有効/無効
   static bool USE_SOFT_SIPP;               // ソフト制約SIPP (SIPPS) の使用フラグ
+  static int GRID_PARTITION_SIZE;          // NxN grid partitioning size
 
   // guidance
   GlobalGuide* global_guide;
