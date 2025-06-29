@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
   program.add_argument("--gg").default_value(false).implicit_value(true);
 
   program.add_argument("--lns").default_value(false).implicit_value(true);
-  program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
+  program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(4);
   program.add_argument("--use_sipp")
       .help("use SIPP for local guide")
       .default_value(false)

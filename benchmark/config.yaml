@@ -1,0 +1,88 @@
+# MAPF Benchmark Configuration
+# This file configures maps, scenarios, and other settings for the benchmark script
+
+# Agent counts to test
+agent_counts: [200, 400, 600, 800, 1000]
+
+# Maps to evaluate
+# Paths are relative to the assets directory
+maps:
+  - name: "Paris_1_256"
+    path: "asset_for_benchmark/Paris_1_256.map"
+    scenarios: "asset_for_benchmark/scen-random"
+  - name: "empty-48-48"
+    path: "asset_for_benchmark/empty-48-48.map"
+    scenarios: "asset_for_benchmark/scen-random"
+  - name: "ost003d"
+    path: "asset_for_benchmark/ost003d.map"  
+    scenarios: "asset_for_benchmark/scen-random"
+  - name: "random-64-64-20"
+    path: "asset_for_benchmark/random-64-64-20.map"
+    scenarios: "asset_for_benchmark/scen-random"
+  - name: "room-64-64-8"
+    path: "asset_for_benchmark/room-64-64-8.map"
+    scenarios: "asset_for_benchmark/scen-random"
+  - name: "warehouse-20-40-10-2-2"
+    path: "asset_for_benchmark/warehouse-20-40-10-2-2.map"
+    scenarios: "asset_for_benchmark/scen-random"
+  # - name: "brc202d"
+  #   path: "asset_for_benchmark/mapf-map/brc202d.map"
+  #   scenarios: "asset_for_benchmark/mapf-scen-random/scen-random"
+  # - name: "den312d"
+  #   path: "asset_for_benchmark/mapf-map/den312d.map"
+  #   scenarios: "asset_for_benchmark/mapf-scen-random/scen-random"
+  # - name: "Berlin_1_256"
+  #   path: "asset_for_benchmark/mapf-map/Berlin_1_256.map"
+  #   scenarios: "asset_for_benchmark/mapf-scen-random/scen-random"
+
+# Algorithms configuration
+algorithms:
+  lg_lacam:
+    name: "LG-LaCAM (Proposed)"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --lg --lg_collision_sort --lg_window 8 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  gg_lacam:
+    name: "GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lg_gg_lacam:
+    name: "LG&GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg --lg --lg_collision_sort --lg_window 8 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lacam:
+    name: "LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lns2:
+    name: "LNS2"
+    executable: "third_party/MAPF-LNS2/lns"
+    args_template: "-m {map_file} -a {scenario} -k {agents} -t 20 -o {result_file_base}"
+    result_file_template: "benchmark_results/lns2/result_{algorithm}_{map_base}_{agents}_{scenario_base}"
+    available: true
+    
+  # lns:
+  #   name: "LNS"
+  #   executable: "../build/main"
+  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg --lns -o {result_file}"
+  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+  #   available: true
+
+# Experimental settings
+settings:
+  timeout: 300  # seconds
+  num_scenarios: 1  # number of scenarios per map
+  scenario_pattern: "{map_base}-random-*.scen"  # pattern to match scenario files
+  # Base directory for assets (can be overridden by command line)
+  assets_base_dir: "../assets"

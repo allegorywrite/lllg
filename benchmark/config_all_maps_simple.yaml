@@ -1,0 +1,122 @@
+# MAPF Benchmark Configuration - All Maps (Simplified)
+# This file configures all maps from mapf-map directory with unified scenario directory
+
+# Agent counts to test
+agent_counts: [200, 400, 600, 800, 1000]
+
+# Maps to evaluate - All maps from asset_for_benchmark/mapf-map/
+# Note: All maps use the same scenario directory specified in settings
+maps:
+  # - name: "Berlin_1_256"
+  #   path: "asset_for_benchmark/mapf-map/Berlin_1_256.map"
+  # - name: "Boston_0_256"
+  #   path: "asset_for_benchmark/mapf-map/Boston_0_256.map"
+  # - name: "Paris_1_256"
+  #   path: "asset_for_benchmark/mapf-map/Paris_1_256.map"
+  # - name: "brc202d"
+  #   path: "asset_for_benchmark/mapf-map/brc202d.map"
+  # - name: "den312d"
+  #   path: "asset_for_benchmark/mapf-map/den312d.map"
+  # - name: "den520d"
+  #   path: "asset_for_benchmark/mapf-map/den520d.map"
+  # - name: "empty-16-16"
+  #   path: "asset_for_benchmark/mapf-map/empty-16-16.map"
+  # - name: "empty-32-32"
+  #   path: "asset_for_benchmark/mapf-map/empty-32-32.map"
+  # - name: "empty-48-48"
+  #   path: "asset_for_benchmark/mapf-map/empty-48-48.map"
+  # - name: "empty-8-8"
+  #   path: "asset_for_benchmark/mapf-map/empty-8-8.map"
+  # - name: "ht_chantry"
+  #   path: "asset_for_benchmark/mapf-map/ht_chantry.map"
+  # - name: "ht_mansion_n"
+  #   path: "asset_for_benchmark/mapf-map/ht_mansion_n.map"
+  # - name: "lak303d"
+  #   path: "asset_for_benchmark/mapf-map/lak303d.map"
+  # - name: "lt_gallowstemplar_n"
+  #   path: "asset_for_benchmark/mapf-map/lt_gallowstemplar_n.map"
+  # - name: "maze-128-128-1"
+  #   path: "asset_for_benchmark/mapf-map/maze-128-128-1.map"
+  # - name: "maze-128-128-10"
+  #   path: "asset_for_benchmark/mapf-map/maze-128-128-10.map"
+  # - name: "maze-128-128-2"
+  #   path: "asset_for_benchmark/mapf-map/maze-128-128-2.map"
+  # - name: "maze-32-32-2"
+  #   path: "asset_for_benchmark/mapf-map/maze-32-32-2.map"
+  # - name: "maze-32-32-4"
+  #   path: "asset_for_benchmark/mapf-map/maze-32-32-4.map"
+  # - name: "orz900d"
+  #   path: "asset_for_benchmark/mapf-map/orz900d.map"
+  # - name: "ost003d"
+  #   path: "asset_for_benchmark/mapf-map/ost003d.map"
+  - name: "random-32-32-10"
+    path: "asset_for_benchmark/mapf-map/random-32-32-10.map"
+  - name: "random-32-32-20"
+    path: "asset_for_benchmark/mapf-map/random-32-32-20.map"
+  - name: "random-64-64-10"
+    path: "asset_for_benchmark/mapf-map/random-64-64-10.map"
+  - name: "random-64-64-20"
+    path: "asset_for_benchmark/mapf-map/random-64-64-20.map"
+  - name: "room-32-32-4"
+    path: "asset_for_benchmark/mapf-map/room-32-32-4.map"
+  - name: "room-64-64-16"
+    path: "asset_for_benchmark/mapf-map/room-64-64-16.map"
+  - name: "room-64-64-8"
+    path: "asset_for_benchmark/mapf-map/room-64-64-8.map"
+  - name: "w_woundedcoast"
+    path: "asset_for_benchmark/mapf-map/w_woundedcoast.map"
+  - name: "warehouse-10-20-10-2-1"
+    path: "asset_for_benchmark/mapf-map/warehouse-10-20-10-2-1.map"
+  - name: "warehouse-10-20-10-2-2"
+    path: "asset_for_benchmark/mapf-map/warehouse-10-20-10-2-2.map"
+  - name: "warehouse-20-40-10-2-1"
+    path: "asset_for_benchmark/mapf-map/warehouse-20-40-10-2-1.map"
+  - name: "warehouse-20-40-10-2-2"
+    path: "asset_for_benchmark/mapf-map/warehouse-20-40-10-2-2.map"
+
+# Algorithms configuration
+algorithms:
+  lg_lacam:
+    name: "LG-LaCAM (Proposed)"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --lg --lg_collision_sort --lg_window 15 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  gg_lacam:
+    name: "GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lg&gg_lacam:
+    name: "LG&GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg --lg --lg_collision_sort --lg_window 15 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lacam:
+    name: "LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lns2:
+    name: "LNS2"
+    executable: "third_party/MAPF-LNS2/lns"
+    args_template: "-m {map_file} -a {scenario} -k {agents} -t 20 -o {result_file_base}"
+    result_file_template: "benchmark_results/lns2/result_{algorithm}_{map_base}_{agents}_{scenario_base}"
+    available: true
+
+# Experimental settings
+settings:
+  timeout: 300  # seconds
+  num_scenarios: 1  # number of scenarios per map
+  scenario_pattern: "{map_base}-random-*.scen"  # pattern to match scenario files
+  # Base directory for assets (can be overridden by command line)
+  assets_base_dir: "../assets"
+  # Default scenario directory for all maps (used when map doesn't specify scenarios)
+  default_scenarios_dir: "asset_for_benchmark/mapf-scen-random/scen-random"

@@ -4,6 +4,7 @@
 #include <iomanip>   // デバッグログのフォーマット用
 #include <thread>    // マルチスレッド用
 #include <mutex>     // マルチスレッド用
+#include <atomic>    // アトミック操作用
 #include <chrono>    // 時間計測用
 
 // 静的メンバー変数の定義
@@ -1002,27 +1003,105 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
           CT.enrollPath(i, guide_paths[i]);
         }
       } else {
-        // For N>1, process in spatial partitions but maintain clear->update->enroll order
-        // Process partitions sequentially
-        for (int partition_id = 0; partition_id < num_partitions; ++partition_id) {
-          const int start_idx = partition_id * agents_per_partition;
-          const int end_idx = std::min(start_idx + agents_per_partition, static_cast<int>(agent_positions.size()));
-          
-          if (start_idx >= end_idx) continue;  // Skip empty partitions
-          
-          // Process agents in this partition with proper order: clear->update->enroll per agent
-          for (int idx = start_idx; idx < end_idx; ++idx) {
-            const int i = agent_positions[idx].second;
+        // For N>1, use limited parallelization to avoid overhead
+        const int effective_partitions = std::min(num_partitions, static_cast<int>(std::thread::hardware_concurrency()));
+        
+        if (effective_partitions <= 2) {
+          // For small partition counts, use sequential processing with spatial optimization
+          for (int partition_id = 0; partition_id < num_partitions; ++partition_id) {
+            const int start_idx = partition_id * agents_per_partition;
+            const int end_idx = std::min(start_idx + agents_per_partition, static_cast<int>(agent_positions.size()));
             
-            // Step 1: Clear this agent's path
+            if (start_idx >= end_idx) continue;  // Skip empty partitions
+            
+            // Process agents in this partition with proper order: clear->update->enroll per agent
+            for (int idx = start_idx; idx < end_idx; ++idx) {
+              const int i = agent_positions[idx].second;
+              
+              // Step 1: Clear this agent's path
+              Q_to[i] = nullptr;
+              CT.clearPath(i, old_guide_paths[i]);
+              
+              // Step 2: Compute new path using current CT state
+              guide_paths[i] = computeGuidePathCorrect(i, Q_from);
+              
+              // Step 3: Enroll new path immediately
+              CT.enrollPath(i, guide_paths[i]);
+            }
+          }
+        } else {
+          // For larger partition counts, use parallel approach with independent CTs
+          std::vector<std::vector<Path>> partition_results(num_partitions);
+          std::vector<std::vector<int>> partition_agent_ids(num_partitions);
+          
+          // Create independent CollisionTable for each partition (thread-safe approach)
+          thread_local std::vector<CollisionTable> thread_CTs;
+          
+          // Use thread pool with limited threads
+          const int max_threads = std::min(4, static_cast<int>(std::thread::hardware_concurrency()));
+          std::vector<std::thread> worker_threads;
+          std::atomic<int> next_partition{0};
+          
+          for (int t = 0; t < max_threads; ++t) {
+            worker_threads.emplace_back([&]() {
+              // Each thread gets its own CT copy
+              CollisionTable thread_CT(ins, true);
+              
+              // Initialize thread CT with current state
+              for (int i = 0; i < N; ++i) {
+                thread_CT.enrollPath(i, guide_paths[i]);
+              }
+              
+              while (true) {
+                int partition_id = next_partition.fetch_add(1);
+                if (partition_id >= num_partitions) break;
+                
+                const int start_idx = partition_id * agents_per_partition;
+                const int end_idx = std::min(start_idx + agents_per_partition, static_cast<int>(agent_positions.size()));
+                
+                if (start_idx >= end_idx) continue;  // Skip empty partitions
+                
+                partition_results[partition_id].resize(end_idx - start_idx);
+                partition_agent_ids[partition_id].resize(end_idx - start_idx);
+                
+                // Process agents in this partition with independent CT
+                for (int idx = start_idx; idx < end_idx; ++idx) {
+                  const int local_idx = idx - start_idx;
+                  const int i = agent_positions[idx].second;
+                  
+                  partition_agent_ids[partition_id][local_idx] = i;
+                  
+                  // Clear path from thread's independent CT
+                  thread_CT.clearPath(i, old_guide_paths[i]);
+                  
+                  // Compute path using independent CT
+                  partition_results[partition_id][local_idx] = computeGuidePathWithCT(i, Q_from, thread_CT);
+                  
+                  // Enroll path to thread's independent CT
+                  thread_CT.enrollPath(i, partition_results[partition_id][local_idx]);
+                }
+              }
+            });
+          }
+          
+          // Wait for all workers to complete
+          for (auto& thread : worker_threads) {
+            thread.join();
+          }
+          
+          // Sequentially update main CT with results
+          for (int i = 0; i < N; ++i) {
             Q_to[i] = nullptr;
             CT.clearPath(i, old_guide_paths[i]);
-            
-            // Step 2: Compute new path using current CT state
-            guide_paths[i] = computeGuidePathCorrect(i, Q_from);
-            
-            // Step 3: Enroll new path immediately
-            CT.enrollPath(i, guide_paths[i]);
+          }
+          
+          // Apply results in spatial order
+          for (int partition_id = 0; partition_id < num_partitions; ++partition_id) {
+            for (size_t local_idx = 0; local_idx < partition_agent_ids[partition_id].size(); ++local_idx) {
+              const int i = partition_agent_ids[partition_id][local_idx];
+              guide_paths[i] = partition_results[partition_id][local_idx];
+              CT.enrollPath(i, guide_paths[i]);
+            }
           }
         }
       }

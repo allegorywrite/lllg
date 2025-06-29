@@ -51,3 +51,10 @@ results
 *experiment_summary.csv
 assets
 anydocgen
+benchmark/individual_plots*
+benchmark/benchmark_results
+benchmark/fig
+benchmark/third_party
+*/.claude
+
+venv
