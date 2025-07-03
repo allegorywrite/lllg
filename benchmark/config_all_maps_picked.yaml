@@ -83,47 +83,47 @@ algorithms:
     result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
     available: true
 
-  # lg_lacam_15:
-  #   name: "LG-LaCAM (Window:15)"
-  #   executable: "../build/main"
-  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --lg --lg_collision_sort --lg_window 15 -o {result_file}"
-  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
-  #   available: true
+  lg_lacam_15:
+    name: "LG-LaCAM (Window:15)"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --lg --lg_collision_sort --lg_window 15 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
 
-  # lg_lacam_20:
-  #   name: "LG-LaCAM (Window:20)"
-  #   executable: "../build/main"
-  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --lg --lg_collision_sort --lg_window 20 -o {result_file}"
-  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
-  #   available: true
+  lg_lacam_20:
+    name: "LG-LaCAM (Window:20)"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --lg --lg_collision_sort --lg_window 20 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
     
-  # gg_lacam:
-  #   name: "GG-LaCAM"
-  #   executable: "../build/main"
-  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg -o {result_file}"
-  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
-  #   available: true
+  gg_lacam:
+    name: "GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
 
-  # lg&gg_lacam:
-  #   name: "LG&GG-LaCAM"
-  #   executable: "../build/main"
-  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg --lg --lg_collision_sort --lg_window 15 -o {result_file}"
-  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
-  #   available: true
+  lg&gg_lacam:
+    name: "LG&GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 --gg --lg --lg_collision_sort --lg_window 15 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
     
-  # lacam:
-  #   name: "LaCAM"
-  #   executable: "../build/main"
-  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 -o {result_file}"
-  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
-  #   available: true
+  lacam:
+    name: "LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
     
-  # lns2:
-  #   name: "LNS2"
-  #   executable: "third_party/MAPF-LNS2/lns"
-  #   args_template: "-m {map_file} -a {scenario} -k {agents} -t 20 -o {result_file_base}"
-  #   result_file_template: "benchmark_results/lns2/result_{algorithm}_{map_base}_{agents}_{scenario_base}"
-  #   available: true
+  lns2:
+    name: "LNS2"
+    executable: "third_party/MAPF-LNS2/lns"
+    args_template: "-m {map_file} -a {scenario} -k {agents} -t 20 -o {result_file_base}"
+    result_file_template: "benchmark_results/lns2/result_{algorithm}_{map_base}_{agents}_{scenario_base}"
+    available: true
 
 # Experimental settings
 settings:

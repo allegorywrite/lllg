@@ -191,6 +191,148 @@ class IndividualMapPlotter:
         
         return df
     
+    def plot_histogram(self, map_file: str, save_plots: bool = True):
+        """Create histogram plots for a single map (flowtime/LB vs scenario number), one per agent count."""
+        
+        map_data = self.df[self.df['map'] == map_file]
+        if map_data.empty:
+            print(f"No data found for map: {map_file}")
+            return None
+            
+        map_name = MAPS.get(map_file, map_file.replace('.map', ''))
+        
+        # Group by scenario to get scenario numbers
+        if 'scenario' not in map_data.columns:
+            print(f"No scenario information found for map: {map_file}")
+            return None
+        
+        # Get unique agent counts and sort them
+        agent_counts = sorted(map_data['agents'].unique())
+        n_agents = len(agent_counts)
+        
+        if n_agents == 0:
+            print(f"No agent data found for map: {map_file}")
+            return None
+        
+        # Create subplots for each agent count
+        fig, axes = plt.subplots(1, n_agents, figsize=(4*n_agents, 8))
+        if n_agents == 1:
+            axes = [axes]  # Make it iterable for single subplot
+        
+        figures = []
+        for agent_idx, agents in enumerate(agent_counts):
+            ax = axes[agent_idx]
+            
+            # Filter data for this agent count
+            agent_data = map_data[map_data['agents'] == agents]
+            
+            # Get unique scenarios and sort them
+            scenarios = sorted(agent_data['scenario'].unique())
+            
+            if len(scenarios) == 0:
+                print(f"No scenarios found for map: {map_file}, agents: {agents}")
+                continue
+            
+            # Collect data by algorithm and scenario
+            algorithm_data = {}
+            for alg_id in sorted(agent_data['algorithm'].unique()):
+                alg_data = agent_data[agent_data['algorithm'] == alg_id]
+                scenario_values = {}
+                
+                for _, row in alg_data.iterrows():
+                    scenario = row['scenario']
+                    flow_ratio = row['flow_time_ratio']
+                    if scenario not in scenario_values:
+                        scenario_values[scenario] = []
+                    scenario_values[scenario].append(flow_ratio)
+                
+                # Take mean if multiple runs per scenario
+                for scenario in scenario_values:
+                    scenario_values[scenario] = np.mean(scenario_values[scenario])
+                
+                algorithm_data[alg_id] = scenario_values
+            
+            # Set up bar positions - use same position for all algorithms (complete overlap)
+            n_algorithms = len(algorithm_data)
+            if n_algorithms == 0:
+                continue
+                
+            bar_width = 1.0  # Full width with no gaps between scenarios
+            x_positions = np.arange(len(scenarios))
+            
+            # Plot bars for each algorithm, sorted by flow_time_ratio (smallest first)
+            for scenario_idx, scenario in enumerate(scenarios):
+                # Get all algorithms that have data for this scenario
+                scenario_algorithms = []
+                for alg_id, scenario_values in algorithm_data.items():
+                    if scenario in scenario_values:
+                        scenario_algorithms.append((alg_id, scenario_values[scenario]))
+                
+                # Sort by flow_time_ratio (descending) so largest values are plotted first (behind)
+                scenario_algorithms.sort(key=lambda x: x[1], reverse=True)
+                
+                # Plot bars for this scenario - all at same x position for complete overlap
+                for bar_idx, (alg_id, flow_ratio) in enumerate(scenario_algorithms):
+                    style = ALGORITHM_STYLES.get(alg_id, {"color": "black", "label": alg_id})
+                    x_pos = x_positions[scenario_idx]  # Same position for all algorithms
+                    
+                    ax.bar(x_pos, flow_ratio, bar_width, 
+                          color=style['color'], alpha=0.8, 
+                          label=style.get('label', alg_id) if scenario_idx == 0 else "",
+                          edgecolor='black', linewidth=1)
+            
+            # Formatting for each subplot
+            # ax.set_xlabel('Scenario Number', fontweight='bold', fontsize=18)  # Removed
+            if agent_idx == 0:  # Only leftmost subplot gets y-label
+                ax.set_ylabel('Flow Time / LB', fontweight='bold', fontsize=18)
+            ax.set_title(f'{agents} Agents', fontweight='bold', fontsize=20)
+            
+            # Remove x-axis labels and ticks
+            ax.set_xticks([])
+            ax.set_xticklabels([])
+            
+            # Ensure all spines are visible with proper thickness
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(2.0)
+                spine.set_edgecolor('black')
+            
+            # Grid styling
+            ax.grid(True, axis='y')
+            
+            # Set y-axis limits with minimum of 1.0
+            y_min = 1.0
+            if len(agent_data) > 0:
+                y_max = agent_data['flow_time_ratio'].max() * 1.1  # Add 10% margin
+                ax.set_ylim(bottom=y_min, top=y_max)
+            
+            # Legend only for the first subplot to avoid repetition
+            if agent_idx == 0:
+                handles, labels = ax.get_legend_handles_labels()
+                by_label = dict(zip(labels, handles))
+                ax.legend(by_label.values(), by_label.keys(), loc='best', frameon=True, 
+                         edgecolor='black', fancybox=False, fontsize=14)
+        
+        # Overall title
+        fig.suptitle(f'{map_name} Map - Histogram', fontweight='bold', fontsize=24, y=0.95)
+        
+        # Adjust layout
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.85)  # Make more room for suptitle
+        
+        if save_plots:
+            # Save with map-specific filename
+            map_clean = map_file.replace('.map', '').replace('-', '_')
+            output_file = self.output_dir / f"histogram_{map_clean}.pdf"
+            plt.savefig(output_file, dpi=300, bbox_inches='tight', 
+                       facecolor='white', edgecolor='black')
+            print(f"Saved histogram plot: {output_file}")
+            plt.close()
+        else:
+            plt.show()
+        
+        return fig
+
     def plot_individual_map(self, map_file: str, save_plots: bool = True):
         """Create runtime vs flow time ratio plot for a single map."""
         
@@ -336,16 +478,20 @@ class IndividualMapPlotter:
         
         return fig
     
-    def plot_all_individual_maps(self, save_plots: bool = True):
+    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False):
         """Generate individual plots for all available maps."""
         
         available_maps = self.df['map'].unique()
-        print(f"Generating plots for {len(available_maps)} maps...")
+        plot_type = "histogram" if histogram_mode else "runtime vs flow ratio"
+        print(f"Generating {plot_type} plots for {len(available_maps)} maps...")
         
         figures = {}
         for map_file in sorted(available_maps):
             print(f"Processing map: {MAPS.get(map_file, map_file)}")
-            fig = self.plot_individual_map(map_file, save_plots)
+            if histogram_mode:
+                fig = self.plot_histogram(map_file, save_plots)
+            else:
+                fig = self.plot_individual_map(map_file, save_plots)
             if fig:
                 figures[map_file] = fig
         
@@ -380,6 +526,8 @@ def main():
                        help="Output directory for plots")
     parser.add_argument("--map", 
                        help="Generate plot for specific map only")
+    parser.add_argument("--histogram", action="store_true",
+                       help="Generate histogram plot (flowtime/LB vs scenario number)")
     
     args = parser.parse_args()
     
@@ -391,11 +539,15 @@ def main():
     
     if args.map:
         # Plot specific map
-        plotter.plot_individual_map(args.map)
+        if args.histogram:
+            plotter.plot_histogram(args.map)
+        else:
+            plotter.plot_individual_map(args.map)
     else:
         # Plot all maps
-        plotter.plot_all_individual_maps()
-        plotter.generate_summary_table_by_map()
+        plotter.plot_all_individual_maps(histogram_mode=args.histogram)
+        if not args.histogram:
+            plotter.generate_summary_table_by_map()
     
     return 0
 
