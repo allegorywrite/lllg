@@ -38,22 +38,6 @@ int main(int argc, char *argv[])
   program.add_argument("--lg").default_value(false).implicit_value(true);
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
   program.add_argument("--lg_window").scan<'d', int>().default_value(10);
-  program.add_argument("--lg_dynamic_window")
-      .help("enable dynamic window size adjustment")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_window_update_type")
-      .help("window update type (0: ACCESS_COUNT, 1: OCCUPANCY, 2: COLLISION)")
-      .scan<'d', int>()
-      .default_value(1);  // デフォルトは占有率ベース
-  program.add_argument("--lg_min_window")
-      .help("minimum window size for dynamic window")
-      .scan<'d', int>()
-      .default_value(5);
-  program.add_argument("--lg_max_window")
-      .help("maximum window size for dynamic window")
-      .scan<'d', int>()
-      .default_value(20);
   program.add_argument("--lg_collision_cost")
       .help("collision cost for dynamic window adjustment")
       .scan<'g', float>()
@@ -70,22 +54,6 @@ int main(int argc, char *argv[])
       .help("global guide second order for dynamic window adjustment")
       .scan<'g', float>()
       .default_value(1e-4f);
-  program.add_argument("--lg_occupancy_threshold")
-      .help("occupancy threshold for dynamic window adjustment")
-      .scan<'g', float>()
-      .default_value(0.25f);
-  program.add_argument("--lg_collision_threshold")
-      .help("collision threshold for dynamic window adjustment")
-      .scan<'g', float>()
-      .default_value(0.5f);
-  program.add_argument("--lg_access_count_threshold")
-      .help("access count threshold for dynamic window adjustment")
-      .scan<'g', float>()
-      .default_value(8.0f);
-  program.add_argument("--lg_improved_heuristic")
-      .help("enable improved A* heuristic function")
-      .default_value(false)
-      .implicit_value(true);
   program.add_argument("--lg_collision_sort")
       .help("enable collision cost sorting for agent processing (high collision cost agents first)")
       .default_value(false)
@@ -94,18 +62,6 @@ int main(int argc, char *argv[])
       .help("enable optimized global guidance calculation")
       .default_value(false)
       .implicit_value(true);
-  program.add_argument("--lg_early_termination")
-      .help("enable early termination when goal is reached")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_readonly_parallel_update")
-      .help("enable read-only parallel update_guide_path processing")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_grid_partition_size")
-      .help("NxN grid partition size for parallel processing")
-      .scan<'d', int>()
-      .default_value(2);
   program.add_argument("--lg_k_step_update")
       .help("enable k-step local guidance update (update guide every k steps instead of every step)")
       .default_value(false)
@@ -122,10 +78,6 @@ int main(int argc, char *argv[])
   program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(4);
   program.add_argument("--use_sipp")
       .help("use SIPP for local guide")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--use_soft_sipp")
-      .help("use soft constraint SIPP (SIPPS) for local guide")
       .default_value(false)
       .implicit_value(true);
 
@@ -154,43 +106,16 @@ int main(int argc, char *argv[])
 
   // local guide
   LocalGuide::ON = program.get<bool>("lg");
-  LocalGuide::WINDOWS.resize(ins.N, program.get<int>("lg_window"));
+//   LocalGuide::WINDOWS.resize(ins.N, program.get<int>("lg_window"));
+  LocalGuide::WINDOW = program.get<int>("lg_window");
   LocalGuide::NUM_REFINE = program.get<int>("lg_num_refine");
-  LocalGuide::DYNAMIC_WINDOW = program.get<bool>("lg_dynamic_window");
-  
-  // ウィンドウ更新タイプの設定
-  int window_update_type = program.get<int>("lg_window_update_type");
-  switch (window_update_type) {
-    case 0:
-      LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::ACCESS_COUNT;
-      break;
-    case 1:
-      LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::OCCUPANCY;
-      break;
-    case 2:
-      LocalGuide::WINDOW_UPDATE_TYPE = WindowUpdateType::COLLISION;
-      break;
-    default:
-      std::cerr << "Invalid window update type: " << window_update_type << std::endl;
-      std::exit(1);
-  }
-  
-  LocalGuide::MIN_WINDOW = program.get<int>("lg_min_window");
-  LocalGuide::MAX_WINDOW = program.get<int>("lg_max_window");
+
   LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
   LocalGuide::COLLISION_COST_ORDER = program.get<float>("lg_collision_cost_order");
   LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = program.get<float>("lg_global_guide_first_order");
   LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = program.get<float>("lg_global_guide_second_order");
-  LocalGuide::OCCUPANCY_THRESHOLD = program.get<float>("lg_occupancy_threshold");
-  LocalGuide::COLLISION_THRESHOLD = program.get<float>("lg_collision_threshold");
-  LocalGuide::ACCESS_COUNT_THRESHOLD = program.get<float>("lg_access_count_threshold");
-  LocalGuide::ENABLE_IMPROVED_HEURISTIC = program.get<bool>("lg_improved_heuristic");
   LocalGuide::ENABLE_COLLISION_SORT = program.get<bool>("lg_collision_sort");
   LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
-  LocalGuide::ENABLE_EARLY_TERMINATION = program.get<bool>("lg_early_termination");
-  LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = program.get<bool>("lg_readonly_parallel_update");
-  LocalGuide::USE_SOFT_SIPP = program.get<bool>("use_soft_sipp");
-  LocalGuide::GRID_PARTITION_SIZE = program.get<int>("lg_grid_partition_size");
   LocalGuide::ENABLE_K_STEP_UPDATE = program.get<bool>("lg_k_step_update");
   LocalGuide::K_STEP_INTERVAL = program.get<int>("lg_k_step_interval");
 
