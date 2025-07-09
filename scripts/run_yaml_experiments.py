@@ -162,6 +162,8 @@ def plot_results(results, output_dir, vary_property, plot_settings=None, baselin
 
 def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None):
     """バイオリンプロットを作成する"""
+    if plot_settings is None:
+        plot_settings = {}
     violin_params = plot_settings.get('violin_params', {})
     y_axis_param = violin_params.get('y_axis', 'soc')
     orient = violin_params.get('orient', 'vertical')
@@ -484,6 +486,9 @@ def plot_scatter(df, output_dir, vary_property, baseline_data=None):
                     'y_values': baseline_y_values
                 }
         
+        # データ収集フェーズ：重心座標を保存
+        centroids = []  # [(group_val, centroid_x, centroid_y, color)]
+        
         for group_val in unique_group_values:
             subset = df[df[grouping_column] == group_val]
             if x_col not in subset or y_col not in subset or subset.empty:
@@ -519,6 +524,9 @@ def plot_scatter(df, output_dir, vary_property, baseline_data=None):
                 centroid_y = np.mean(y)
                 plt.scatter(centroid_x, centroid_y, marker='X', s=100, 
                            color=color_map[group_val], edgecolor='black', zorder=5) # value を group_val に変更
+                
+                # 重心座標を保存（後で線で接続するため）
+                centroids.append((group_val, centroid_x, centroid_y, color_map[group_val]))
                 
                 # 楕円（信頼区間）
                 if len(x) >= 3:  # 共分散行列を計算するには最低3点必要
@@ -602,6 +610,9 @@ def plot_scatter(df, output_dir, vary_property, baseline_data=None):
                     plt.scatter(centroid_x, centroid_y, marker='X', s=100, 
                                color=color, edgecolor='black', zorder=5)
                     
+                    # ベースラインも重心リストに追加
+                    centroids.append((baseline_name, centroid_x, centroid_y, color))
+                    
                     # 楕円（信頼区間）
                     if len(baseline_x_values) >= 3:
                         x_vals = np.array(baseline_x_values)
@@ -632,6 +643,82 @@ def plot_scatter(df, output_dir, vary_property, baseline_data=None):
                                     ax.add_patch(ellipse)
                                 except np.linalg.LinAlgError:
                                     pass  # 楕円描画をスキップ
+        
+        # 重心を点線で接続（配列パラメータの場合）
+        if centroids:
+            try:
+                if is_collab_plot:
+                    # コラボレーションプロットの場合、lg_windowとlg_k_step_intervalの両方で線を引く
+                    import re
+                    from collections import defaultdict
+                    
+                    # lg_windowごとにグループ分けして、lg_k_step_intervalで接続 (赤色)
+                    window_groups = defaultdict(list)
+                    for group_val, centroid_x, centroid_y, color in centroids:
+                        if isinstance(group_val, str) and 'lg_window=' in group_val and 'lg_k_step_interval=' in group_val:
+                            try:
+                                window_match = re.search(r'lg_window=(\d+)', group_val)
+                                interval_match = re.search(r'lg_k_step_interval=(\d+)', group_val)
+                                if window_match and interval_match:
+                                    window_val = int(window_match.group(1))
+                                    interval_val = int(interval_match.group(1))
+                                    window_groups[window_val].append((interval_val, centroid_x, centroid_y, color, group_val))
+                            except (ValueError, IndexError):
+                                continue
+                    
+                    # 各lg_window値について、lg_k_step_intervalで接続 (赤色)
+                    for window_val, group_data in window_groups.items():
+                        if len(group_data) >= 2:
+                            group_data.sort(key=lambda item: item[0])  # lg_k_step_intervalでソート
+                            x_coords = [item[1] for item in group_data]
+                            y_coords = [item[2] for item in group_data]
+                            plt.plot(x_coords, y_coords, linestyle=':', color='red', alpha=0.8, linewidth=2, zorder=3)
+                    
+                    # lg_k_step_intervalごとにグループ分けして、lg_windowで接続 (青色)
+                    interval_groups = defaultdict(list)
+                    for group_val, centroid_x, centroid_y, color in centroids:
+                        if isinstance(group_val, str) and 'lg_window=' in group_val and 'lg_k_step_interval=' in group_val:
+                            try:
+                                window_match = re.search(r'lg_window=(\d+)', group_val)
+                                interval_match = re.search(r'lg_k_step_interval=(\d+)', group_val)
+                                if window_match and interval_match:
+                                    window_val = int(window_match.group(1))
+                                    interval_val = int(interval_match.group(1))
+                                    interval_groups[interval_val].append((window_val, centroid_x, centroid_y, color, group_val))
+                            except (ValueError, IndexError):
+                                continue
+                    
+                    # 各lg_k_step_interval値について、lg_windowで接続 (青色)
+                    for interval_val, group_data in interval_groups.items():
+                        if len(group_data) >= 2:
+                            group_data.sort(key=lambda item: item[0])  # lg_windowでソート
+                            x_coords = [item[1] for item in group_data]
+                            y_coords = [item[2] for item in group_data]
+                            plt.plot(x_coords, y_coords, linestyle=':', color='blue', alpha=0.8, linewidth=2, zorder=3)
+                        
+                else:
+                    # 単独パラメータの場合、数値でソート可能な場合は重心を接続
+                    numeric_centroids = []
+                    for group_val, centroid_x, centroid_y, color in centroids:
+                        try:
+                            numeric_val = float(group_val)
+                            numeric_centroids.append((numeric_val, centroid_x, centroid_y, color))
+                        except (ValueError, TypeError):
+                            # 数値でない場合はスキップ
+                            continue
+                    
+                    if len(numeric_centroids) >= 2:
+                        # 数値でソート
+                        numeric_centroids.sort(key=lambda item: item[0])
+                        
+                        # 重心を点線で接続
+                        x_coords = [item[1] for item in numeric_centroids]
+                        y_coords = [item[2] for item in numeric_centroids]
+                        
+                        plt.plot(x_coords, y_coords, linestyle=':', color='gray', alpha=0.8, linewidth=2, zorder=3)
+                        
+            except Exception as e:
+                print(f"警告: 重心の接続に失敗しました: {e}")
         
         # y_colに基づいてタイトルと軸ラベルを設定
         if y_col == 'soc_normalized':

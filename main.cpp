@@ -106,6 +106,14 @@ int main(int argc, char *argv[])
       .help("NxN grid partition size for parallel processing")
       .scan<'d', int>()
       .default_value(2);
+  program.add_argument("--lg_k_step_update")
+      .help("enable k-step local guidance update (update guide every k steps instead of every step)")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lg_k_step_interval")
+      .help("k-step update interval (number of steps between guide updates)")
+      .scan<'d', int>()
+      .default_value(3);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
@@ -183,6 +191,8 @@ int main(int argc, char *argv[])
   LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = program.get<bool>("lg_readonly_parallel_update");
   LocalGuide::USE_SOFT_SIPP = program.get<bool>("use_soft_sipp");
   LocalGuide::GRID_PARTITION_SIZE = program.get<int>("lg_grid_partition_size");
+  LocalGuide::ENABLE_K_STEP_UPDATE = program.get<bool>("lg_k_step_update");
+  LocalGuide::K_STEP_INTERVAL = program.get<int>("lg_k_step_interval");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

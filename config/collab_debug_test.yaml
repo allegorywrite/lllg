@@ -1,0 +1,29 @@
+# Simple collab test configuration for debugging dotted lines
+i:
+  - assets/random-32-32-20.map-scen-random/scen-random/random-32-32-20-random-1.scen
+  - assets/random-32-32-20.map-scen-random/scen-random/random-32-32-20-random-2.scen
+
+m:
+  - assets/random-32-32-20.map
+  - assets/random-32-32-20.map
+
+N: 400
+v: 3
+
+"&window_k_step_interval_collab": 
+  properties:
+    - lg_window
+    - lg_k_step_interval
+
+# LG parameters
+lg: true
+gg: false
+lg_window: [4, 8]
+lg_k_step_interval: [1, 2]
+
+# Plot settings
+plot_settings:
+  mode: violin
+  violin_params:
+    y_axis: soc_normalized
+    orient: vertical

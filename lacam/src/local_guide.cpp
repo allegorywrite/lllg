@@ -29,6 +29,8 @@ bool LocalGuide::ENABLE_EARLY_TERMINATION = false;
 bool LocalGuide::ENABLE_READONLY_PARALLEL_UPDATE = true;
 bool LocalGuide::USE_SOFT_SIPP = false;
 int LocalGuide::GRID_PARTITION_SIZE = 2;  // NxN grid partitioning (default 2x2)
+bool LocalGuide::ENABLE_K_STEP_UPDATE = false;  // k-step local guidance update (disabled by default)
+int LocalGuide::K_STEP_INTERVAL = 3;  // k-step update interval (default 3)
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -50,7 +52,8 @@ LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
       Q_to(N, nullptr),
       global_guide(gg),
       node_access_counts(N, 0), // アクセス回数を0で初期化
-      cached_collision_costs(N, 0.0f) // 衝突コストキャッシュを0で初期化
+      cached_collision_costs(N, 0.0f), // 衝突コストキャッシュを0で初期化
+      step_counters(N, 0) // k-step用ステップカウンタを0で初期化
 {
   // 各エージェントのウィンドウサイズを初期化
   WINDOWS.resize(N, 10);  // デフォルト値は10
@@ -710,6 +713,42 @@ void LocalGuide::update_window_size(const int i, const Config& Q_from) {
   }
 }
 
+// k-step update 判定用のヘルパー関数
+bool LocalGuide::should_update_guide_path(int agent_id) {
+  if (!ENABLE_K_STEP_UPDATE) {
+    return true;  // 元の実装では毎回更新
+  }
+  
+  // 範囲チェック
+  if (agent_id < 0 || agent_id >= static_cast<int>(step_counters.size())) {
+    return true;  // 安全のため常に更新
+  }
+  
+  // 初回は必ず更新（guide_pathsが未初期化の場合）
+  if (step_counters[agent_id] == 0) {
+    // guide_pathsが全てnullptrの場合は初回とみなして必ず更新
+    bool all_null = true;
+    for (size_t t = 0; t < guide_paths[agent_id].size(); ++t) {
+      if (guide_paths[agent_id][t] != nullptr) {
+        all_null = false;
+        break;
+      }
+    }
+    if (all_null) {
+      step_counters[agent_id] = 1;  // 初回更新としてカウント
+      return true;
+    }
+  }
+  
+  // k-step毎に更新する
+  step_counters[agent_id]++;
+  if (step_counters[agent_id] >= K_STEP_INTERVAL) {
+    step_counters[agent_id] = 0;  // カウンタをリセット
+    return true;
+  }
+  return false;
+}
+
 void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
   if (!ON || NUM_REFINE <= 0) return;
@@ -926,6 +965,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
   // create initial candidate
   for (auto i = 0; i < N; ++i) {
+    if (guide_paths[i].size() <= 1) continue;
     if (Q_from[i] != guide_paths[i][1]) continue;
     for (auto t = 0; t < WINDOWS[i] - 1; ++t) {
       guide_paths[i][t] = guide_paths[i][t + 1];
@@ -999,7 +1039,15 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
           const auto i = order[_i];
           Q_to[i] = nullptr;
           CT.clearPath(i, old_guide_paths[i]);
-          update_guide_path(i);
+          
+          // k-step optimization: only update guide path if needed
+          if (should_update_guide_path(i)) {
+            update_guide_path(i);
+          } else {
+            // 簡単なケース：既存のパスを維持（計算負荷削減のため）
+            // guide_pathsはそのまま使用（シフトは行わない）
+          }
+          
           CT.enrollPath(i, guide_paths[i]);
         }
       } else {
@@ -1022,7 +1070,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
               Q_to[i] = nullptr;
               CT.clearPath(i, old_guide_paths[i]);
               
-              // Step 2: Compute new path using current CT state
+              // Step 2: Compute new path using current CT state (parallel processing - always update)
               guide_paths[i] = computeGuidePathCorrect(i, Q_from);
               
               // Step 3: Enroll new path immediately
@@ -1074,7 +1122,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
                   // Clear path from thread's independent CT
                   thread_CT.clearPath(i, old_guide_paths[i]);
                   
-                  // Compute path using independent CT
+                  // Compute path using independent CT (parallel processing - always update)
                   partition_results[partition_id][local_idx] = computeGuidePathWithCT(i, Q_from, thread_CT);
                   
                   // Enroll path to thread's independent CT
@@ -1143,7 +1191,15 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         const auto i = cost_agent.second;
         Q_to[i] = nullptr;
         CT.clearPath(i, guide_paths[i]);
-        update_guide_path(i);
+        
+        // k-step optimization: only update guide path if needed
+        if (should_update_guide_path(i)) {
+          update_guide_path(i);
+        } else {
+          // 簡単なケース：既存のパスを維持（計算負荷削減のため）
+          // guide_pathsはそのまま使用（シフトは行わない）
+        }
+        
         CT.enrollPath(i, guide_paths[i]);
       }
     } else {
@@ -1152,7 +1208,15 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         const auto i = order[_i];
         Q_to[i] = nullptr;
         CT.clearPath(i, guide_paths[i]);
-        update_guide_path(i);
+        
+        // k-step optimization: only update guide path if needed
+        if (should_update_guide_path(i)) {
+          update_guide_path(i);
+        } else {
+          // 簡単なケース：既存のパスを維持（計算負荷削減のため）
+          // guide_pathsはそのまま使用（シフトは行わない）
+        }
+        
         CT.enrollPath(i, guide_paths[i]);
       }
     }

@@ -86,6 +86,8 @@ struct LocalGuide {
   static bool ENABLE_READONLY_PARALLEL_UPDATE; // 読み取り専用並列update_guide_pathの有効/無効
   static bool USE_SOFT_SIPP;               // ソフト制約SIPP (SIPPS) の使用フラグ
   static int GRID_PARTITION_SIZE;          // NxN grid partitioning size
+  static bool ENABLE_K_STEP_UPDATE;       // k-step local guidance update の有効/無効
+  static int K_STEP_INTERVAL;             // k-step update の間隔
 
   // guidance
   GlobalGuide* global_guide;
@@ -93,6 +95,7 @@ struct LocalGuide {
 
   std::vector<int> node_access_counts;  // エージェントごとのノードアクセス回数の累積
   std::vector<float> cached_collision_costs;  // A*探索時の衝突コストをキャッシュ
+  std::vector<int> step_counters;          // k-step update用の各エージェントのステップカウンタ
 
   LocalGuide(const Instance* _ins, DistTable* _D, int seed = 0,
              GlobalGuide* _global_guide = nullptr, bool _use_sipp = false);
@@ -127,4 +130,7 @@ struct LocalGuide {
   void update_window_by_access_count(const int i);
   void update_window_by_occupancy(const int i, const Config& Q_from);
   void update_window_by_collision(const int i);
+  
+  // k-step update 判定用のヘルパー関数
+  bool should_update_guide_path(int agent_id);
 };
