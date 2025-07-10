@@ -54,4 +54,5 @@ struct GlobalGuide {
   ~GlobalGuide();
 
   GGHeuristic get(const int i, Vertex *v);
+  int get_simple(const int i, const Vertex *v_from, const Vertex *v_to);
 };

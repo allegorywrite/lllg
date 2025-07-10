@@ -66,6 +66,10 @@ int main(int argc, char *argv[])
       .help("enable k-step local guidance update (update guide every k steps instead of every step)")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--lg_pruning")
+      .help("enable pruning in local guide (prune unnecessary search branches)")
+      .default_value(false)
+      .implicit_value(true);
   program.add_argument("--lg_k_step_interval")
       .help("k-step update interval (number of steps between guide updates)")
       .scan<'d', int>()
@@ -118,6 +122,7 @@ int main(int argc, char *argv[])
   LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
   LocalGuide::ENABLE_K_STEP_UPDATE = program.get<bool>("lg_k_step_update");
   LocalGuide::K_STEP_INTERVAL = program.get<int>("lg_k_step_interval");
+  LocalGuide::ENABLE_PRUNING = program.get<bool>("lg_pruning");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");

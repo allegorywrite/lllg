@@ -66,10 +66,8 @@ struct LocalGuide {
 
   // hyper parameters
   static bool ON;
-  // static std::vector<int> WINDOWS;  // 各エージェントのウィンドウサイズ
   static int WINDOW;
   static int NUM_REFINE;
-  // static bool DYNAMIC_WINDOW;  // 動的ウィンドウサイズの有効/無効
   static float COLLISION_COST;  // 衝突コスト
   static float COLLISION_COST_ORDER;  // 衝突コストの係数
   static float GLOBAL_GUIDE_FIRST_ORDER;  // グローバルガイダンスの係数
@@ -78,6 +76,7 @@ struct LocalGuide {
   static bool ENABLE_OPTIMIZED_GUIDANCE;   // 最適化されたガイダンス計算の有効/無効
   static bool ENABLE_K_STEP_UPDATE;       // k-step local guidance update の有効/無効
   static int K_STEP_INTERVAL;             // k-step update の間隔
+  static bool ENABLE_PRUNING;
 
   // guidance
   GlobalGuide* global_guide;

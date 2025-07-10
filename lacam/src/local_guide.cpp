@@ -17,8 +17,9 @@ float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-2;
 float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-4;
 bool LocalGuide::ENABLE_COLLISION_SORT = false;
 bool LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = false;
-bool LocalGuide::ENABLE_K_STEP_UPDATE = false;  // k-step local guidance update (disabled by default)
-int LocalGuide::K_STEP_INTERVAL = 3;  // k-step update interval (default 3)
+bool LocalGuide::ENABLE_K_STEP_UPDATE = false;
+int LocalGuide::K_STEP_INTERVAL = 3;
+bool LocalGuide::ENABLE_PRUNING = false;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -137,7 +138,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     n->parent = parent;
 
     // g-value
-    auto collision = 0;  // 並列処理時は衝突コスト計算をスキップ
+    auto collision = 0;
     if (parent != nullptr) {
       collision = CT.getCollisionCost(parent->where, where, parent->when);
     }
@@ -146,10 +147,10 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
     n->h = D->get(who, where);
     
-    // グローバルガイダンスの最適化された適用
     if (ENABLE_OPTIMIZED_GUIDANCE) {
-      auto&& gg_h = global_guide->get(who, where);
-      n->g += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+      if (parent != nullptr) {
+        n->g += GLOBAL_GUIDE_FIRST_ORDER * global_guide->get_simple(who, parent->where, where);;
+      }
     } else {
       auto&& gg_h = global_guide->get(who, where);
       n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
@@ -241,13 +242,21 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         cached_collision_costs[i] = total_collision_cost;
         break;
       }
-      // expand - DETERMINISTIC (same as parallel version)
       auto&& C = n->where->actions;
-      // Remove shuffle for consistency with parallel version
       std::shuffle(C.begin(), C.end(), MT);
       for (auto&& v : C) {
         const auto t = n->when + 1;
         if (CLOSED[t][v->id] != nullptr) continue;
+
+        if(ENABLE_PRUNING){
+          const int buffer = 0;
+          const int dist_to_goal = D->get(i, v);
+          const int dist_from_start = D->get(i, Q_from[i]);
+          if (dist_from_start > 0 && (n->when + dist_to_goal) / dist_from_start >= WINDOW + buffer) {
+            continue;
+          }
+        }
+        
         auto n_new = get_node(i, v, n);
         OPEN.push(n_new);
       }
