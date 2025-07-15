@@ -189,7 +189,206 @@ class IndividualMapPlotter:
         if 'flow_time_ratio' not in df.columns or df['flow_time_ratio'].isna().all():
             df['flow_time_ratio'] = df['flow_time'] / df['lower_bound']
         
+        # Extract comp_time_init from result files when lns is enabled (only if not already in CSV)
+        if 'comp_time_init' not in df.columns or df['comp_time_init'].isna().all():
+            df = self._add_comp_time_init(df)
+        
         return df
+    
+    def _add_comp_time_init(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Extract comp_time_init from result files when LNS is enabled."""
+        import yaml
+        import re
+        
+        # Add comp_time_init column
+        df['comp_time_init'] = None
+        
+        # Check if we have a config file to determine LNS setting
+        config_path = Path("config_all_maps_lns.yaml")
+        if not config_path.exists():
+            config_path = Path("config.yaml")
+        
+        if config_path.exists():
+            try:
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                lns_enabled = config.get('settings', {}).get('lns', False)
+            except:
+                lns_enabled = False
+        else:
+            lns_enabled = False
+        
+        if not lns_enabled:
+            return df
+        
+        # Extract comp_time_init for each row
+        for idx, row in df.iterrows():
+            try:
+                # Reconstruct result file path based on the pattern used in benchmark
+                algorithm = row['algorithm']
+                map_name = Path(row['map']).stem  # Remove .map extension
+                agents = row['agents']
+                scenario = Path(row['scenario']).stem  # Remove .scen extension
+                
+                result_file = Path(f"../build/result_{algorithm}_{map_name}_{agents}_{scenario}.txt")
+                
+                if result_file.exists():
+                    with open(result_file, 'r') as f:
+                        content = f.read()
+                    
+                    # Extract comp_time_init value
+                    match = re.search(r'comp_time_init=([0-9.]+)', content)
+                    if match:
+                        df.loc[idx, 'comp_time_init'] = float(match.group(1))
+                        
+            except Exception as e:
+                print(f"Warning: Could not extract comp_time_init for row {idx}: {e}")
+                continue
+        
+        return df
+    
+    def plot_lns_scatter(self, map_file: str, save_plots: bool = True):
+        """Create scatter plot for LNS mode with comp_time_init vs Flow Time/LB."""
+        
+        map_data = self.df[self.df['map'] == map_file]
+        if map_data.empty:
+            print(f"No data found for map: {map_file}")
+            return None
+        
+        # Check if comp_time_init data is available
+        if 'comp_time_init' not in map_data.columns or map_data['comp_time_init'].isna().all():
+            print(f"No comp_time_init data found for map: {map_file}")
+            return None
+            
+        # Handle both .map and non-.map formats
+        if map_file.endswith('.map'):
+            map_name = MAPS.get(map_file, map_file.replace('.map', ''))
+        else:
+            map_name = MAPS.get(map_file + '.map', map_file)
+        
+        # Create figure
+        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+        
+        # First collect all data by algorithm and group by agent count
+        algorithm_data = {}
+        for alg_id in sorted(map_data['algorithm'].unique()):
+            alg_data = map_data[map_data['algorithm'] == alg_id]
+            # Filter out rows with missing comp_time_init
+            alg_data = alg_data[alg_data['comp_time_init'].notna()]
+            
+            if alg_data.empty:
+                continue
+            
+            # Group by agent count and take mean
+            agg_dict = {
+                'comp_time_init': 'mean',
+                'flow_time_ratio': 'mean'
+            }
+            grouped = alg_data.groupby('agents').agg(agg_dict).reset_index().sort_values('agents')
+            
+            if not grouped.empty:
+                algorithm_data[alg_id] = grouped
+        
+        # Connect same agent counts across algorithms with gray dotted lines
+        if len(algorithm_data) >= 2:
+            all_agents = set()
+            for data in algorithm_data.values():
+                all_agents.update(data['agents'].values)
+            
+            for agents in sorted(all_agents):
+                points = []
+                for alg_id in sorted(algorithm_data.keys()):
+                    alg_data = algorithm_data[alg_id]
+                    agent_data = alg_data[alg_data['agents'] == agents]
+                    if not agent_data.empty:
+                        points.append((agent_data['comp_time_init'].iloc[0], agent_data['flow_time_ratio'].iloc[0]))
+                
+                if len(points) >= 2:
+                    points.sort()  # Sort by comp_time_init
+                    x_coords = [p[0] for p in points]
+                    y_coords = [p[1] for p in points]
+                    ax.plot(x_coords, y_coords, color='gray', linestyle=':', 
+                           linewidth=1, alpha=0.7, zorder=0)
+        
+        # Plot each algorithm with agent count series connected by lines
+        for alg_id in sorted(map_data['algorithm'].unique()):
+            if alg_id not in algorithm_data:
+                continue
+                
+            grouped = algorithm_data[alg_id]
+            alg_name = ALGORITHMS.get(alg_id, alg_id)
+            style = ALGORITHM_STYLES.get(alg_id, {"color": "black", "marker": "o", "linestyle": "-", "linewidth": 3})
+            
+            # Plot with agent count series connected
+            ax.plot(grouped['comp_time_init'], grouped['flow_time_ratio'], 
+                   marker=style['marker'], linestyle=style['linestyle'],
+                   color=style['color'], linewidth=style.get('linewidth', 3),
+                   markersize=style.get('markersize', 12), 
+                   markerfacecolor='white', markeredgecolor=style['color'],
+                   markeredgewidth=style.get('markeredgewidth', 2), 
+                   label=style.get('label', alg_name), zorder=2)
+            
+            # Add agent count labels only for LaCAM
+            if alg_id == 'lacam':
+                for _, row in grouped.iterrows():
+                    agents = int(row["agents"])
+                    if agents == 1000:
+                        label_text = 'agents: 1000'
+                    else:
+                        label_text = str(agents)
+                    ax.annotate(label_text, 
+                              (row['comp_time_init'], row['flow_time_ratio']),
+                              xytext=(-24, 8), textcoords='offset points',
+                              fontsize=18, ha='left', va='bottom', zorder=3)
+        
+        # Formatting
+        ax.set_xlabel('comp_time_init (ms)', fontweight='bold', fontsize=22)
+        ax.set_ylabel('Flow Time / LB', fontweight='bold', fontsize=22)
+        ax.set_title(f'{map_name} Map - LNS Scatter Plot', fontweight='bold', fontsize=24, y=1.05)
+        
+        # Ensure all spines are visible with proper thickness
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_linewidth(3.0)
+            spine.set_edgecolor('black')
+        
+        # Grid styling
+        ax.grid(True)
+        
+        # Legend
+        ax.legend(loc='best', frameon=True, edgecolor='black', fancybox=False)
+        
+        # Set reasonable axis limits
+        if not map_data.empty:
+            comp_time_values = map_data['comp_time_init'].dropna()
+            flow_ratio_values = map_data['flow_time_ratio'].dropna()
+            
+            if len(comp_time_values) > 0 and len(flow_ratio_values) > 0:
+                # Add margins
+                x_min, x_max = comp_time_values.min(), comp_time_values.max()
+                y_min, y_max = flow_ratio_values.min(), flow_ratio_values.max()
+                
+                x_margin = (x_max - x_min) * 0.1
+                y_margin = (y_max - y_min) * 0.1
+                
+                ax.set_xlim(left=max(0, x_min - x_margin), right=x_max + x_margin)
+                ax.set_ylim(bottom=max(1.0, y_min - y_margin), top=y_max + y_margin)
+        
+        # Adjust layout
+        plt.tight_layout()
+        
+        if save_plots:
+            # Save with map-specific filename
+            map_clean = map_file.replace('.map', '').replace('-', '_')
+            output_file = self.output_dir / f"lns_scatter_{map_clean}.pdf"
+            plt.savefig(output_file, dpi=300, bbox_inches='tight', 
+                       facecolor='white', edgecolor='black')
+            print(f"Saved LNS scatter plot: {output_file}")
+            plt.close()
+        else:
+            plt.show()
+        
+        return fig
     
     def plot_histogram(self, map_file: str, save_plots: bool = True):
         """Create histogram plots for a single map (flowtime/LB vs scenario number), one per agent count."""
@@ -351,10 +550,15 @@ class IndividualMapPlotter:
         for alg_id in sorted(map_data['algorithm'].unique()):
             alg_data = map_data[map_data['algorithm'] == alg_id]
             # Group by agent count and take mean
-            grouped = alg_data.groupby('agents').agg({
+            agg_dict = {
                 'runtime': 'mean',
                 'flow_time_ratio': 'mean'
-            }).reset_index().sort_values('agents')
+            }
+            # Add comp_time_init if available
+            if 'comp_time_init' in alg_data.columns:
+                agg_dict['comp_time_init'] = 'mean'
+            
+            grouped = alg_data.groupby('agents').agg(agg_dict).reset_index().sort_values('agents')
             
             if not grouped.empty:
                 algorithm_data[alg_id] = grouped
@@ -406,6 +610,12 @@ class IndividualMapPlotter:
                         label_text = 'agents: 1000'
                     else:
                         label_text = str(agents)
+                    
+                    # Add comp_time_init if available
+                    if 'comp_time_init' in grouped.columns and pd.notna(row.get('comp_time_init')):
+                        comp_time_init = row['comp_time_init']
+                        label_text += f' (init: {comp_time_init:.1f})'
+                    
                     ax.annotate(label_text, 
                               (row['runtime'], row['flow_time_ratio']),
                               xytext=(-24, 8), textcoords='offset points',
@@ -478,17 +688,24 @@ class IndividualMapPlotter:
         
         return fig
     
-    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False):
+    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False, lns_mode: bool = False):
         """Generate individual plots for all available maps."""
         
         available_maps = self.df['map'].unique()
-        plot_type = "histogram" if histogram_mode else "runtime vs flow ratio"
+        if lns_mode:
+            plot_type = "LNS scatter"
+        elif histogram_mode:
+            plot_type = "histogram"
+        else:
+            plot_type = "runtime vs flow ratio"
         print(f"Generating {plot_type} plots for {len(available_maps)} maps...")
         
         figures = {}
         for map_file in sorted(available_maps):
             print(f"Processing map: {MAPS.get(map_file, map_file)}")
-            if histogram_mode:
+            if lns_mode:
+                fig = self.plot_lns_scatter(map_file, save_plots)
+            elif histogram_mode:
                 fig = self.plot_histogram(map_file, save_plots)
             else:
                 fig = self.plot_individual_map(map_file, save_plots)
@@ -528,6 +745,8 @@ def main():
                        help="Generate plot for specific map only")
     parser.add_argument("--histogram", action="store_true",
                        help="Generate histogram plot (flowtime/LB vs scenario number)")
+    parser.add_argument("--lns", action="store_true",
+                       help="Generate LNS scatter plot (comp_time_init vs Flow Time/LB)")
     
     args = parser.parse_args()
     
@@ -539,14 +758,16 @@ def main():
     
     if args.map:
         # Plot specific map
-        if args.histogram:
+        if args.lns:
+            plotter.plot_lns_scatter(args.map)
+        elif args.histogram:
             plotter.plot_histogram(args.map)
         else:
             plotter.plot_individual_map(args.map)
     else:
         # Plot all maps
-        plotter.plot_all_individual_maps(histogram_mode=args.histogram)
-        if not args.histogram:
+        plotter.plot_all_individual_maps(histogram_mode=args.histogram, lns_mode=args.lns)
+        if not args.histogram and not args.lns:
             plotter.generate_summary_table_by_map()
     
     return 0

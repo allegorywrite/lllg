@@ -77,6 +77,7 @@ struct LocalGuide {
   static bool ENABLE_K_STEP_UPDATE;       // k-step local guidance update の有効/無効
   static int K_STEP_INTERVAL;             // k-step update の間隔
   static bool ENABLE_PRUNING;
+  static float PRUNING_RATE;
 
   // guidance
   GlobalGuide* global_guide;

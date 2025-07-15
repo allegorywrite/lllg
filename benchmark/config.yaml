@@ -65,6 +65,13 @@ algorithms:
     result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
     available: true
     
+  guided_lacam2:
+    name: "Guided-LaCAM2 (F1.2)"
+    executable: "third_party/Guided-PIBT/guided-lacam2-build/main"
+    args_template: "-m {map_file} -i {scenario} -t 20 -N {agents} -v 3 -O 3"
+    result_file_template: "benchmark_results/guided_lacam2/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
   lns2:
     name: "LNS2"
     executable: "third_party/MAPF-LNS2/lns"

@@ -70,6 +70,10 @@ int main(int argc, char *argv[])
       .help("enable pruning in local guide (prune unnecessary search branches)")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--lg_pruning_rate")
+      .help("pruning rate for local guide (prune search branches if estimated cost exceeds this rate)")
+      .scan<'g', float>()
+      .default_value(1.0f);
   program.add_argument("--lg_k_step_interval")
       .help("k-step update interval (number of steps between guide updates)")
       .scan<'d', int>()
@@ -123,6 +127,7 @@ int main(int argc, char *argv[])
   LocalGuide::ENABLE_K_STEP_UPDATE = program.get<bool>("lg_k_step_update");
   LocalGuide::K_STEP_INTERVAL = program.get<int>("lg_k_step_interval");
   LocalGuide::ENABLE_PRUNING = program.get<bool>("lg_pruning");
+  LocalGuide::PRUNING_RATE = program.get<float>("lg_pruning_rate");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
@@ -138,8 +143,11 @@ int main(int argc, char *argv[])
   // solve
   const auto use_sipp = program.get<bool>("use_sipp");
   const auto deadline = Deadline(time_limit_sec * 1000);
-  auto [solution, lacam] = solve(ins, verbose - 1, &deadline, seed, use_sipp);
+  auto result = solve_with_timing(ins, verbose - 1, &deadline, seed, use_sipp);
+  auto solution = result.solution;
+  auto lacam = result.lacam;
   const auto comp_time_ms = deadline.elapsed_ms();
+  const auto comp_time_init_ms = result.comp_time_init_ms;
 
   // failure
   if (solution.empty()) {
@@ -157,7 +165,9 @@ int main(int argc, char *argv[])
 
   // post processing
   print_stats(verbose, &deadline, ins, solution, comp_time_ms);
-  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide);
+  // Only pass comp_time_init_ms if LNS was used
+  const auto comp_time_init_to_log = LNS::ON ? comp_time_init_ms : -1.0;
+  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide, comp_time_init_to_log);
   delete lacam;
   return 0;
 }

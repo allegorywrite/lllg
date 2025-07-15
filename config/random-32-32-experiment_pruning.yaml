@@ -1,0 +1,93 @@
+# LG-LACAM random-10-10 experiment configuration
+# This configuration defines parameter combinations for random-10-10 map experiments
+
+# Basic fixed parameters
+i:
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-1.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-2.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-3.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-4.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-5.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-6.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-7.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-8.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-9.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-10.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-11.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-12.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-13.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-14.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-15.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-16.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-17.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-18.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-19.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-20.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-21.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-22.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-23.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-24.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-25.scen
+m:
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  
+N: 400
+v: 3
+
+baseline_without_lg:
+  lg: false
+  gg: false
+baseline_with_gg:
+  lg: false
+  gg: true
+
+"&window_pruning_rate_collab": 
+  properties:
+    - lg_window
+    - lg_pruning_rate
+
+# LG parameters
+lg: true
+gg: false
+lg_window: [4, 8, 12, 16, 20]
+# lg_window: [8, 20]
+# lg_collision_sort: true
+# lns: true
+# time_limit_sec: 2
+
+lg_pruning: true
+lg_pruning_rate: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0]
+time_limit_sec: 10
+
+# Plot settings
+plot_settings:
+  mode: violin
+  line: lg_window
+  hide_scatter: true
+  violin_params:
+    y_axis: soc_normalized
+    orient: vertical

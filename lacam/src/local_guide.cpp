@@ -20,6 +20,7 @@ bool LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = false;
 bool LocalGuide::ENABLE_K_STEP_UPDATE = false;
 int LocalGuide::K_STEP_INTERVAL = 3;
 bool LocalGuide::ENABLE_PRUNING = false;
+float LocalGuide::PRUNING_RATE = 1.0;
 
 // 座標変換用の関数
 inline int get_x(int k, const Graph* G) { return k % G->width; }
@@ -105,7 +106,10 @@ bool LocalGuide::should_update_guide_path(int agent_id) {
       }
     }
     if (all_null) {
-      step_counters[agent_id] = 1;  // 初回更新としてカウント
+      // 0～K_STEP_INTERVALの間でランダムに初期化
+      static thread_local std::mt19937 rng(std::random_device{}());
+      std::uniform_int_distribution<int> dist(0, std::max(0, K_STEP_INTERVAL));
+      step_counters[agent_id] = dist(rng);
       return true;
     }
   }
@@ -121,7 +125,7 @@ bool LocalGuide::should_update_guide_path(int agent_id) {
 
 void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
-  if (!ON || NUM_REFINE <= 0) return;
+  if (!ON || NUM_REFINE < 0) return;
 
   auto cmp = [&](WSPPNode* a, WSPPNode* b) {
     if (a->f != b->f) return a->f > b->f;
@@ -224,8 +228,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       CLOSED[n->when][n->where->id] = n;
       CLOSED_idx.emplace_back(n->when, n->where->id);
 
-      // check goal condition
-      if (n->when == WINDOW - 1) {
+      // check goal condition or time limit
+      if (n->where == ins->goals[i] || n->when == WINDOW - 1) {
         // register to CT and calculate collision cost
         float total_collision_cost = 0;
         auto temp_n = n;
@@ -239,6 +243,12 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
           }
           temp_n = temp_n->parent;
         }
+        // 残りの時間ステップもgoalで埋める（goalに到達した場合）
+        if (n->where == ins->goals[i]) {
+          for (int t = n->when + 1; t < WINDOW; ++t) {
+            guide_paths[i][t] = ins->goals[i];
+          }
+        }
         cached_collision_costs[i] = total_collision_cost;
         break;
       }
@@ -249,10 +259,9 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         if (CLOSED[t][v->id] != nullptr) continue;
 
         if(ENABLE_PRUNING){
-          const int buffer = 0;
           const int dist_to_goal = D->get(i, v);
           const int dist_from_start = D->get(i, Q_from[i]);
-          if (dist_from_start > 0 && (n->when + dist_to_goal) / dist_from_start >= WINDOW + buffer) {
+          if (dist_from_start > 0 && (n->when + 1 + dist_to_goal) - dist_from_start > WINDOW * PRUNING_RATE) {
             continue;
           }
         }
@@ -261,22 +270,34 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         OPEN.push(n_new);
       }
     }
+    
+    if (guide_paths[i][0] == nullptr) {
+      std::cout << "Not Supposed Error" << std::endl;
+      for (auto t = 0; t < WINDOW; ++t) {
+        guide_paths[i][t] = Q_from[i];
+      }
+      cached_collision_costs[i] = 0.0f;
+    }
+    
     // clear CLOSED
     for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
   };
 
-  // create initial candidate
-  for (auto i = 0; i < N; ++i) {
-    if (guide_paths[i].size() <= 1) continue;
-    if (Q_from[i] != guide_paths[i][1]) continue;
-    for (auto t = 0; t < WINDOW - 1; ++t) {
-      guide_paths[i][t] = guide_paths[i][t + 1];
+  // create initial candidate (skip when NUM_REFINE=0)
+  if (NUM_REFINE != 0) {
+    for (auto i = 0; i < N; ++i) {
+      if (guide_paths[i].size() <= 1) continue;
+      if (Q_from[i] != guide_paths[i][1]) continue;
+      for (auto t = 0; t < WINDOW - 1; ++t) {
+        guide_paths[i][t] = guide_paths[i][t + 1];
+      }
+      CT.enrollPath(i, guide_paths[i]);
     }
-    CT.enrollPath(i, guide_paths[i]);
   }
 
   // 参照軌道の改善
-  for (auto k = 0; k < NUM_REFINE; ++k) {
+  int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;
+  for (auto k = 0; k < refine_iterations; ++k) {
     
     if (ENABLE_COLLISION_SORT) {
       // Serial collision cost sorting (original implementation)
@@ -331,7 +352,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
 LocalHeuristic LocalGuide::get(const int i, Vertex* v)
 {
-  if (!ON || NUM_REFINE <= 0 || Q_to[i] == nullptr)
+  if (!ON || NUM_REFINE < 0 || Q_to[i] == nullptr)
     return D->get(i, v);
   if (v == Q_to[i]) return 0;
   return 1;

@@ -190,6 +190,10 @@ class BenchmarkRunner:
                 else:
                     print(f"LNS2 result file not found: {lns2_csv_file}")
                     return None
+            elif algorithm == "guided_lacam2":
+                # guided_lacam2 outputs to stdout, parse directly
+                return self.parse_guided_lacam2_stdout(result.stdout, algorithm, map_name,
+                                                     scenario, agent_count, end_time - start_time)
             else:
                 result_file_path = Path(result_file)
                 if result_file_path.exists():
@@ -217,7 +221,8 @@ class BenchmarkRunner:
                 "timeout": True,
                 "flow_time": None,
                 "lower_bound": None,
-                "flow_time_ratio": None
+                "flow_time_ratio": None,
+                "comp_time_init": None
             }
         except Exception as e:
             print(f"Exception running {algorithm}: {e}")
@@ -243,7 +248,8 @@ class BenchmarkRunner:
                 "lower_bound": None,
                 "flow_time_ratio": None,
                 "makespan": None,
-                "makespan_lb": None
+                "makespan_lb": None,
+                "comp_time_init": None
             }
             
             # Parse lg_lacam output format
@@ -288,6 +294,9 @@ class BenchmarkRunner:
             elif line.startswith('comp_time='):
                 # Convert from milliseconds to seconds
                 result_data['runtime'] = float(line.split('=')[1]) / 1000.0
+            elif line.startswith('comp_time_init='):
+                # Extract comp_time_init for LNS
+                result_data['comp_time_init'] = float(line.split('=')[1])
         
         # Calculate flow time ratio
         if result_data['flow_time'] and result_data['lower_bound'] and result_data['lower_bound'] > 0:
@@ -346,6 +355,54 @@ class BenchmarkRunner:
         """Parse LaCAM (base) output format."""
         # LaCAM base uses the same output format as lg_lacam
         return self.parse_lg_lacam_result(content, result_data)
+    
+    def parse_guided_lacam2_stdout(self, stdout: str, algorithm: str, map_name: str,
+                                 scenario: str, agent_count: int, runtime: float) -> Dict:
+        """Parse guided_lacam2 stdout output format."""
+        result_data = {
+            "algorithm": algorithm,
+            "map": map_name,
+            "scenario": os.path.basename(scenario),
+            "agents": agent_count,
+            "runtime": runtime,
+            "success": False,
+            "timeout": False,
+            "flow_time": None,
+            "lower_bound": None,
+            "flow_time_ratio": None,
+            "comp_time_init": None
+        }
+        
+        try:
+            lines = stdout.strip().split('\n')
+            last_line = lines[-1] if lines else ""
+            
+            # Look for the final result line like:
+            # solved: 20259ms	makespan: 125 (lb=112, ub=1.12)	sum_of_costs: 11439 (lb=8371, ub=1.37)	sum_of_loss: 9786 (lb=8371, ub=1.17)
+            if "solved:" in last_line and "sum_of_costs:" in last_line:
+                result_data['success'] = True
+                
+                # Extract sum_of_costs (flow_time)
+                import re
+                soc_match = re.search(r'sum_of_costs:\s*(\d+)', last_line)
+                if soc_match:
+                    result_data['flow_time'] = int(soc_match.group(1))
+                
+                # Extract lower bound from sum_of_costs
+                soc_lb_match = re.search(r'sum_of_costs:.*lb=(\d+)', last_line)
+                if soc_lb_match:
+                    result_data['lower_bound'] = int(soc_lb_match.group(1))
+                
+                # Calculate ratio
+                if result_data['flow_time'] and result_data['lower_bound']:
+                    result_data['flow_time_ratio'] = result_data['flow_time'] / result_data['lower_bound']
+            
+            return result_data
+            
+        except Exception as e:
+            print(f"Error parsing guided_lacam2 stdout: {e}")
+            result_data['success'] = False
+            return result_data
     
     def run_all_experiments(self, algorithms: List[str] = None, 
                           maps: List[str] = None, 

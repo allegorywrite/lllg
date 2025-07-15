@@ -55,6 +55,9 @@ benchmark/individual_plots*
 benchmark/benchmark_results
 benchmark/fig
 benchmark/third_party
+benchmark/backup
+heatmap/
+random-32-32-20/
 */.claude
 
 venv

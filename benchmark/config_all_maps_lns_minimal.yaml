@@ -1,0 +1,61 @@
+# MAPF Benchmark Configuration - All Maps (Simplified)
+# This file configures all maps from mapf-map directory with unified scenario directory
+
+# Agent counts to test
+# agent_counts: [200, 400, 600, 800, 1000]
+agent_counts: [200]
+
+# Maps to evaluate - All maps from asset_for_benchmark/mapf-map/
+# Note: All maps use the same scenario directory specified in settings
+maps:
+  - name: "random-64-64-20"
+    path: "asset_for_benchmark/mapf-map/random-64-64-20.map"
+
+# Algorithms configuration
+algorithms:
+
+  lg_lacam:
+    name: "LG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 10 --lns --lg --lg_collision_sort --lg_window 10 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  gg_lacam:
+    name: "GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 10 --lns --gg -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+
+  lg&gg_lacam:
+    name: "LG&GG-LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 10 --lns --gg --lg --lg_collision_sort --lg_window 10 -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  lacam:
+    name: "LaCAM"
+    executable: "../build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 10 --lns -o {result_file}"
+    result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
+  # lns2:
+  #   name: "LNS2"
+  #   executable: "third_party/MAPF-LNS2/lns"
+  #   args_template: "-m {map_file} -a {scenario} -k {agents} -t 20 -o {result_file_base}"
+  #   result_file_template: "benchmark_results/lns2/result_{algorithm}_{map_base}_{agents}_{scenario_base}"
+  #   available: true
+
+# Experimental settings
+settings:
+  timeout: 300  # seconds
+  lns: true
+  num_scenarios: 3  # number of scenarios per map
+  scenario_pattern: "{map_base}-random-*.scen"  # pattern to match scenario files
+  # Base directory for assets (can be overridden by command line)
+  assets_base_dir: "../assets"
+  # Default scenario directory for all maps (used when map doesn't specify scenarios)
+  default_scenarios_dir: "asset_for_benchmark/mapf-scen-random/scen-random"

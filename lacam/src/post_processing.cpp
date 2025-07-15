@@ -79,7 +79,8 @@ static const std::regex r_map_name = std::regex(R"(.+/(.+))");
 void make_log(const Instance &ins, const Solution &solution,
               const std::string &output_name, const double comp_time_ms,
               const std::string &map_name, const int seed,
-              const bool log_short, const LocalGuide* local_guide)
+              const bool log_short, const LocalGuide* local_guide,
+              const double comp_time_init_ms)
 {
   // map name
   std::smatch results;
@@ -107,6 +108,9 @@ void make_log(const Instance &ins, const Solution &solution,
   log << "sum_of_loss_lb=" << get_sum_of_costs_lower_bound(ins, dist_table)
       << "\n";
   log << "comp_time=" << comp_time_ms << "\n";
+  if (comp_time_init_ms >= 0.0) {
+    log << "comp_time_init=" << comp_time_init_ms << "\n";
+  }
   log << "seed=" << seed << "\n";
   if (log_short) return;
   log << "starts=";
