@@ -70,6 +70,7 @@ struct LocalGuide {
   static int NUM_REFINE;
   static float COLLISION_COST;  // 衝突コスト
   static float COLLISION_COST_ORDER;  // 衝突コストの係数
+  static bool GLOBAL_GUIDE_ON;
   static float GLOBAL_GUIDE_FIRST_ORDER;  // グローバルガイダンスの係数
   static float GLOBAL_GUIDE_SECOND_ORDER;  // グローバルガイダンスの係数
   static bool ENABLE_COLLISION_SORT;      // 衝突コストソートの有効/無効

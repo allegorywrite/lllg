@@ -55,8 +55,7 @@ m:
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   
-# N: [100, 200, 300, 400]
-N: 400
+N: [100, 200, 300, 400]
 v: 3
 
 baseline_without_lg:
@@ -66,25 +65,18 @@ baseline_with_gg:
   lg: false
   gg: true
 
-# "&N_lg_k_step_interval_collab": 
-#   properties:
-#     - N
-#     - lg_k_step_interval
-"&lg_window_k_step_interval_collab": 
+"&N_lg_window_collab": 
   properties:
+    - N
     - lg_window
-    - lg_k_step_interval
 
 # LG parameters
 lg: true
 gg: false
 # lg_window: 15
-lg_k_step_update: true
-lg_k_step_interval: [1, 2, 3]
-# lg_num_refine: [1, 2, 3]
-lg_window: [8, 12, 16, 20]
+# lg_num_refine: [0, 1, 2, 3]
+lg_window: [4, 8, 12, 16, 20]
 # lg_collision_sort: true
-lg_collision_cost: 2.5
 # lns: true
 # time_limit_sec: 2
 
@@ -95,27 +87,13 @@ time_limit_sec: 20
 # Plot settings
 plot_settings:
   mode: violin
-  line: lg_k_step_interval
+  line: N
   hide_scatter: true
   hide_data_label: false
   violin_params:
+    # y_axis: soc_normalized
     y_axis: benchmark_normalized
     title: title
     x_label: x_label
     y_label: y_label
     orient: vertical
-
-# plot_settings:
-#   mode: violin
-#   line: N
-#   hide_scatter: true
-#   hide_data_label: true
-#   violin_params:
-#     # y_axis: soc_normalized
-#     y_axis: benchmark_normalized
-#     x_axis: lg_num_refine
-#     title: title
-#     x_label: x_label
-#     x_type: int
-#     y_label: y_label
-#     orient: vertical

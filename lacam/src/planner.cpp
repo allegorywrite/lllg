@@ -23,16 +23,17 @@ SolveResult solve_with_timing(const Instance &ins, int verbose, const Deadline *
   info(1, verbose, "start lacam");
   
   auto solution = lacam->solve();
+  auto solution_init = solution;
   auto init_end = std::chrono::high_resolution_clock::now();
   auto comp_time_init_ms = std::chrono::duration<double, std::milli>(init_end - init_start).count();
   
   if (solution.empty() || !LNS::ON) {
-    return {solution, lacam, comp_time_init_ms};
+    return {solution, solution_init, lacam, comp_time_init_ms};
   }
 
   // lns refinement
   info(1, verbose, "use lns");
   auto refiner = PLNS(&ins, &D, solution, deadline, verbose);
   solution = refiner.refine();
-  return {solution, lacam, comp_time_init_ms};
+  return {solution, solution_init, lacam, comp_time_init_ms};
 }

@@ -2,15 +2,17 @@
 # This file configures all maps from mapf-map directory with unified scenario directory
 
 # Agent counts to test
-agent_counts: [200, 1000]
+agent_counts: [200, 400, 600, 800, 1000]
 # agent_counts: [200]
-timespan: [5, 15]
+timespan: [5, 10, 15, 20, 25, 30]
 
 # Maps to evaluate - All maps from asset_for_benchmark/mapf-map/
 # Note: All maps use the same scenario directory specified in settings
 maps:
   - name: "random-64-64-20"
     path: "asset_for_benchmark/mapf-map/random-64-64-20.map"
+  - name: "warehouse-20-40-10-2-1"
+    path: "asset_for_benchmark/mapf-map/warehouse-20-40-10-2-1.map"
 
 # Algorithms configuration
 algorithms:
@@ -54,7 +56,7 @@ algorithms:
 settings:
   timeout: 300  # seconds
   lns: true
-  num_scenarios: 1  # number of scenarios per map
+  num_scenarios: 3  # number of scenarios per map
   scenario_pattern: "{map_base}-random-*.scen"  # pattern to match scenario files
   # Base directory for assets (can be overridden by command line)
   assets_base_dir: "../assets"

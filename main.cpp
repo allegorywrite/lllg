@@ -1,5 +1,6 @@
 #include <argparse/argparse.hpp>
 #include <planner.hpp>
+#include <post_processing.hpp>
 
 int main(int argc, char *argv[])
 {
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_collision_cost")
       .help("collision cost for dynamic window adjustment")
       .scan<'g', float>()
-      .default_value(1.0f);
+      .default_value(3.0f);
   program.add_argument("--lg_collision_cost_order")
       .help("collision cost order for dynamic window adjustment")
       .scan<'g', float>()
@@ -49,11 +50,11 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_global_guide_first_order")
       .help("global guide first order for dynamic window adjustment")
       .scan<'g', float>()
-      .default_value(1e-2f);
+      .default_value(1e-5f);
   program.add_argument("--lg_global_guide_second_order")
       .help("global guide second order for dynamic window adjustment")
       .scan<'g', float>()
-      .default_value(1e-4f);
+      .default_value(1e-9f);
   program.add_argument("--lg_collision_sort")
       .help("enable collision cost sorting for agent processing (high collision cost agents first)")
       .default_value(false)
@@ -131,6 +132,7 @@ int main(int argc, char *argv[])
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
+  LocalGuide::GLOBAL_GUIDE_ON = program.get<bool>("gg");
   GlobalGuide::COST_MARGIN = program.get<int>("gg_margin");
 
   // pibt
@@ -145,6 +147,7 @@ int main(int argc, char *argv[])
   const auto deadline = Deadline(time_limit_sec * 1000);
   auto result = solve_with_timing(ins, verbose - 1, &deadline, seed, use_sipp);
   auto solution = result.solution;
+  auto solution_init = result.solution_init;
   auto lacam = result.lacam;
   const auto comp_time_ms = deadline.elapsed_ms();
   const auto comp_time_init_ms = result.comp_time_init_ms;
@@ -167,7 +170,9 @@ int main(int argc, char *argv[])
   print_stats(verbose, &deadline, ins, solution, comp_time_ms);
   // Only pass comp_time_init_ms if LNS was used
   const auto comp_time_init_to_log = LNS::ON ? comp_time_init_ms : -1.0;
-  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide, comp_time_init_to_log);
+  const auto empty_solution = Solution();
+  const auto& solution_init_to_log = LNS::ON ? solution_init : empty_solution;
+  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide, comp_time_init_to_log, solution_init_to_log);
   delete lacam;
   return 0;
 }

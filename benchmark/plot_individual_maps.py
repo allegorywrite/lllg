@@ -16,7 +16,7 @@ import json
 
 # Set style for publication-quality plots
 plt.rcParams.update({
-    'font.size': 18,
+    'font.size': 24,
     'font.family': 'serif',
     'font.serif': ['Times New Roman', 'Times', 'serif'],
     'axes.linewidth': 2.5,
@@ -43,7 +43,7 @@ plt.rcParams.update({
     'legend.edgecolor': 'black',
     'legend.facecolor': 'white',
     'legend.framealpha': 1.0,
-    'legend.fontsize': 16,
+    'legend.fontsize': 24,
     'pdf.fonttype': 42,
     'ps.fonttype': 42
 })
@@ -55,9 +55,9 @@ ALGORITHM_STYLES = {
         "marker": "*",          # Star
         "linestyle": "-",       # Solid line
         "linewidth": 5,         # Line thickness
-        "markersize": 24,       # Data point size
+        "markersize": 28,       # Data point size
         "markeredgewidth": 3,   # Data point border thickness
-        "label": "LG-LaCAM"
+        "label": "LG"
     },
     "lg_lacam_8": {
         "color": "#1E90FF",     # Dodger Blue
@@ -66,7 +66,7 @@ ALGORITHM_STYLES = {
         "linewidth": 5,
         "markersize": 24,
         "markeredgewidth": 3,
-        "label": "LG-LaCAM (Window:8)"
+        "label": "LG (Window:8)"
     },
     "lg_lacam_15": {
         "color": "#00BFFF",     # Deep Sky Blue
@@ -75,7 +75,7 @@ ALGORITHM_STYLES = {
         "linewidth": 5,
         "markersize": 24,
         "markeredgewidth": 3,
-        "label": "LG-LaCAM (Window:15)"
+        "label": "LG (Window:15)"
     },
     "lg_lacam_20": {
         "color": "#87CEFA",     # Light Sky Blue
@@ -84,25 +84,25 @@ ALGORITHM_STYLES = {
         "linewidth": 5,
         "markersize": 24,
         "markeredgewidth": 3,
-        "label": "LG-LaCAM (Window:20)"
+        "label": "LG (Window:20)"
     },
     "gg_lacam": {
         "color": "#ff66c4",     # pink
-        "marker": "*",          # Star
+        "marker": "o",          # Diamond
         "linestyle": "-",       # Solid line
         "linewidth": 5,         # Line thickness
-        "markersize": 24,       # Data point size
+        "markersize": 18,       # Data point size
         "markeredgewidth": 3,   # Data point border thickness
-        "label": "GG-LaCAM"
+        "label": "GG"
     },
     "lg&gg_lacam": {
         "color": "#FDD017",     # Yellow
-        "marker": "*",          # Star
+        "marker": "X",          # Plus (filled)
         "linestyle": "-",       # Solid line
         "linewidth": 5,         # Line thickness
-        "markersize": 24,       # Data point size
+        "markersize": 20,       # Data point size
         "markeredgewidth": 3,   # Data point border thickness
-        "label": "LG&GG-LaCAM"
+        "label": "LG+GG"
     },
     "lacam": {
         "color": "#008000",     # Green
@@ -125,7 +125,7 @@ ALGORITHM_STYLES = {
     "lns2": {
         "color": "#800080",     # Purple
         "marker": "D",          # Diamond
-        "linestyle": ":",       # Dotted line
+        "linestyle": "-",       # Dotted line
         "linewidth": 5,         # Line thickness
         "markersize": 14,       # Data point size
         "markeredgewidth": 3,   # Data point border thickness
@@ -143,11 +143,11 @@ ALGORITHM_STYLES = {
 }
 
 ALGORITHMS = {
-    "lg_lacam": "LG-LaCAM (Proposed)",
-    "lg_lacam_8": "LG-LaCAM (Window:8)",
-    "lg_lacam_15": "LG-LaCAM (Window:15)",
-    "lg_lacam_20": "LG-LaCAM (Window:20)",
-    "lg&gg_lacam": "LG&GG-LaCAM",
+    "lg_lacam": "LG (Proposed)",
+    "lg_lacam_8": "LG (Window:8)",
+    "lg_lacam_15": "LG (Window:15)",
+    "lg_lacam_20": "LG (Window:20)",
+    "lg&gg_lacam": "LG+GG",
     "lacam": "LaCAM",
     "eecbs_f": "EECBS-f", 
     "lns2": "LNS2"
@@ -172,15 +172,57 @@ class IndividualMapPlotter:
         self.df = self.load_results()
         
     def load_results(self) -> pd.DataFrame:
-        """Load benchmark results from CSV or JSON file."""
-        if self.results_file.suffix == '.csv':
-            df = pd.read_csv(self.results_file)
-        elif self.results_file.suffix == '.json':
-            with open(self.results_file, 'r') as f:
-                data = json.load(f)
-            df = pd.DataFrame(data)
+        """Load benchmark results from CSV or JSON file(s)."""
+        
+        # Check if the file is a combined file or if we need to load multiple timespan files
+        if self.results_file.exists():
+            # Single file provided
+            if self.results_file.suffix == '.csv':
+                df = pd.read_csv(self.results_file)
+            elif self.results_file.suffix == '.json':
+                with open(self.results_file, 'r') as f:
+                    data = json.load(f)
+                df = pd.DataFrame(data)
+            else:
+                raise ValueError(f"Unsupported file format: {self.results_file.suffix}")
         else:
-            raise ValueError(f"Unsupported file format: {self.results_file.suffix}")
+            # Try to load multiple timespan files
+            base_name = self.results_file.stem
+            base_dir = self.results_file.parent
+            
+            # Check if there are timespan-specific files
+            timespan_files = []
+            for file_path in base_dir.glob(f"{base_name}_timespan_*.csv"):
+                timespan_files.append(file_path)
+            
+            if not timespan_files:
+                # Try JSON files
+                for file_path in base_dir.glob(f"{base_name}_timespan_*.json"):
+                    timespan_files.append(file_path)
+            
+            if not timespan_files:
+                raise FileNotFoundError(f"No results files found for {self.results_file}")
+            
+            # Load and combine all timespan files
+            dfs = []
+            for file_path in sorted(timespan_files):
+                print(f"Loading timespan file: {file_path}")
+                if file_path.suffix == '.csv':
+                    timespan_df = pd.read_csv(file_path)
+                elif file_path.suffix == '.json':
+                    with open(file_path, 'r') as f:
+                        data = json.load(f)
+                    timespan_df = pd.DataFrame(data)
+                else:
+                    continue
+                
+                dfs.append(timespan_df)
+            
+            if not dfs:
+                raise ValueError("No valid timespan files found")
+            
+            # Combine all dataframes
+            df = pd.concat(dfs, ignore_index=True)
         
         # Filter successful runs only
         df = df[df['success'] == True].copy()
@@ -189,19 +231,18 @@ class IndividualMapPlotter:
         if 'flow_time_ratio' not in df.columns or df['flow_time_ratio'].isna().all():
             df['flow_time_ratio'] = df['flow_time'] / df['lower_bound']
         
-        # Extract comp_time_init from result files when lns is enabled (only if not already in CSV)
-        if 'comp_time_init' not in df.columns or df['comp_time_init'].isna().all():
-            df = self._add_comp_time_init(df)
-        
         return df
     
-    def _add_comp_time_init(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Extract comp_time_init from result files when LNS is enabled."""
+    def _add_lns_init_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Extract comp_time_init and soc_init from result files when LNS is enabled."""
         import yaml
         import re
         
-        # Add comp_time_init column
-        df['comp_time_init'] = None
+        # Add columns if they don't exist
+        if 'comp_time_init' not in df.columns:
+            df['comp_time_init'] = None
+        if 'soc_init' not in df.columns:
+            df['soc_init'] = None
         
         # Check if we have a config file to determine LNS setting
         config_path = Path("config_all_maps_lns.yaml")
@@ -221,7 +262,7 @@ class IndividualMapPlotter:
         if not lns_enabled:
             return df
         
-        # Extract comp_time_init for each row
+        # Extract data for each row
         for idx, row in df.iterrows():
             try:
                 # Reconstruct result file path based on the pattern used in benchmark
@@ -236,13 +277,18 @@ class IndividualMapPlotter:
                     with open(result_file, 'r') as f:
                         content = f.read()
                     
-                    # Extract comp_time_init value
-                    match = re.search(r'comp_time_init=([0-9.]+)', content)
-                    if match:
-                        df.loc[idx, 'comp_time_init'] = float(match.group(1))
+                    # Extract comp_time_init
+                    match_time = re.search(r'comp_time_init=([0-9.]+)', content)
+                    if match_time:
+                        df.loc[idx, 'comp_time_init'] = float(match_time.group(1))
+                        
+                    # Extract soc_init
+                    match_soc = re.search(r'soc_init=(\d+)', content)
+                    if match_soc:
+                        df.loc[idx, 'soc_init'] = int(match_soc.group(1))
                         
             except Exception as e:
-                print(f"Warning: Could not extract comp_time_init for row {idx}: {e}")
+                print(f"Warning: Could not extract LNS init data for row {idx}: {e}")
                 continue
         
         return df
@@ -389,6 +435,170 @@ class IndividualMapPlotter:
             plt.show()
         
         return fig
+
+    def plot_lns_sub(self, map_file: str, save_plots: bool = True):
+        """Create runtime vs flow time ratio plot for LNS sub-mode with multiple timespan support."""
+        
+        map_data = self.df[self.df['map'] == map_file]
+        if map_data.empty:
+            print(f"No data found for map: {map_file}")
+            return None
+
+        if 'comp_time_init' not in map_data.columns or map_data['comp_time_init'].isna().all() or \
+           'flow_time_init' not in map_data.columns or map_data['flow_time_init'].isna().all():
+            print(f"No LNS init data found for map: {map_file}")
+            return None
+
+        map_name = MAPS.get(map_file, map_file.replace('.map', ''))
+        
+        # Create a separate plot for each agent count
+        agent_counts = sorted(map_data['agents'].unique())
+        figs = {}
+
+        for agents in agent_counts:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+            agent_data = map_data[map_data['agents'] == agents]
+
+            for alg_id in sorted(agent_data['algorithm'].unique()):
+                alg_data = agent_data[agent_data['algorithm'] == alg_id]
+                if alg_data.empty:
+                    continue
+
+                style = ALGORITHM_STYLES.get(alg_id, {"color": "black", "marker": "o", "linestyle": "-"})
+                
+                # Check if we have timespan data
+                if 'timespan' in alg_data.columns and alg_data['timespan'].notna().any():
+                    # Group by timespan and calculate means
+                    timespan_data = alg_data.groupby('timespan').agg({
+                        'comp_time_init': 'mean',
+                        'flow_time_init': 'mean',
+                        'runtime': 'mean',
+                        'flow_time_ratio': 'mean',
+                        'lower_bound': 'mean'
+                    }).reset_index().sort_values('timespan')
+                    
+                    if timespan_data.empty:
+                        continue
+                    
+                    # Create trend line: comp_time_init/1000 -> runtime(t1) -> runtime(t2) -> ...
+                    x_coords = []
+                    y_coords = []
+                    
+                    # First point: comp_time_init/1000 and flow_time_init/lower_bound
+                    first_row = timespan_data.iloc[0]
+                    x_coords.append(first_row['comp_time_init'] / 1000)
+                    y_coords.append(first_row['flow_time_init'] / first_row['lower_bound'])
+                    
+                    # Subsequent points: runtime(timespan) and flow_time_ratio
+                    for _, row in timespan_data.iterrows():
+                        x_coords.append(row['runtime'])
+                        y_coords.append(row['flow_time_ratio'])
+                    
+                    # Plot the trend line
+                    ax.plot(x_coords, y_coords, 
+                            marker=style['marker'], linestyle=style['linestyle'], 
+                            color=style['color'], linewidth=style.get('linewidth', 3),
+                            markersize=style.get('markersize', 24),
+                            markerfacecolor='white', markeredgecolor=style['color'],
+                            markeredgewidth=style.get('markeredgewidth', 3),
+                            label=style.get('label', alg_id))
+                    
+                    # Add fill_between area for uncertainty
+                    # Calculate min/max for each timespan
+                    timespan_bounds = alg_data.groupby('timespan').agg({
+                        'comp_time_init': ['min', 'max'],
+                        'flow_time_init': ['min', 'max'],
+                        'runtime': ['min', 'max'],
+                        'flow_time_ratio': ['min', 'max'],
+                        'lower_bound': 'mean'
+                    }).reset_index()
+                    
+                    # Flatten column names
+                    timespan_bounds.columns = ['timespan'] + ['_'.join(col) if col[1] else col[0] for col in timespan_bounds.columns[1:]]
+                    timespan_bounds = timespan_bounds.sort_values('timespan')
+                    
+                    if len(timespan_bounds) > 0:
+                        x_fill_lower = []
+                        x_fill_upper = []
+                        y_fill_lower = []
+                        y_fill_upper = []
+                        
+                        # First point bounds
+                        first_bounds = timespan_bounds.iloc[0]
+                        x_fill_lower.append(first_bounds['comp_time_init_min'] / 1000)
+                        x_fill_upper.append(first_bounds['comp_time_init_max'] / 1000)
+                        y_fill_lower.append(first_bounds['flow_time_init_min'] / first_bounds['lower_bound_mean'])
+                        y_fill_upper.append(first_bounds['flow_time_init_max'] / first_bounds['lower_bound_mean'])
+                        
+                        # Subsequent points bounds
+                        for _, row in timespan_bounds.iterrows():
+                            x_fill_lower.append(row['runtime_min'])
+                            x_fill_upper.append(row['runtime_max'])
+                            y_fill_lower.append(row['flow_time_ratio_min'])
+                            y_fill_upper.append(row['flow_time_ratio_max'])
+                        
+                        # Create fill_between using the trend line with bounds
+                        ax.fill_between(x_coords, y_fill_lower, y_fill_upper,
+                                        color=style['color'], alpha=0.1, linewidth=0)
+                
+                else:
+                    # Fallback to original behavior if no timespan data
+                    # Calculate initial and final points (mean)
+                    runtime_init_mean = alg_data['comp_time_init'].mean() / 1000 # Convert to sec
+                    flow_time_init_ratio_mean = alg_data['flow_time_init'].mean() / alg_data['lower_bound'].mean()
+                    runtime_final_mean = alg_data['runtime'].mean()
+                    flow_time_final_ratio_mean = alg_data['flow_time_ratio'].mean()
+
+                    # Calculate initial and final points (min/max for fill_between)
+                    runtime_init_min = alg_data['comp_time_init'].min() / 1000
+                    runtime_init_max = alg_data['comp_time_init'].max() / 1000
+                    flow_time_init_ratio_min = alg_data['flow_time_init'].min() / alg_data['lower_bound'].mean()
+                    flow_time_init_ratio_max = alg_data['flow_time_init'].max() / alg_data['lower_bound'].mean()
+                    runtime_final_min = alg_data['runtime'].min()
+                    runtime_final_max = alg_data['runtime'].max()
+                    flow_time_final_ratio_min = alg_data['flow_time_ratio'].min()
+                    flow_time_final_ratio_max = alg_data['flow_time_ratio'].max()
+
+                    # Plotting the line between init and final (mean values)
+                    ax.plot([runtime_init_mean, runtime_final_mean], [flow_time_init_ratio_mean, flow_time_final_ratio_mean],
+                            marker=style['marker'], linestyle=style['linestyle'], color=style['color'],
+                            linewidth=style.get('linewidth', 3), markersize=style.get('markersize', 12),
+                            markerfacecolor='white', markeredgecolor=style['color'],
+                            markeredgewidth=style.get('markeredgewidth', 3),
+                            label=style.get('label', alg_id))
+
+                    # Plotting the fill_between area
+                    ax.fill_between([runtime_init_mean, runtime_final_mean], 
+                                    [flow_time_init_ratio_min, flow_time_final_ratio_min], 
+                                    [flow_time_init_ratio_max, flow_time_final_ratio_max], 
+                                    color=style['color'], alpha=0.1, linewidth=0)
+
+            # Formatting
+            # ax.set_xlabel('Runtime (sec)', fontweight='bold', fontsize=22)
+            # ax.set_ylabel('Flow Time / LB', fontweight='bold', fontsize=22)
+            # ax.set_title(f'{map_name} Map - {agents} Agents', fontweight='bold', fontsize=24, y=1.05)
+            ax.grid(True)
+            # Set x-axis lower limit to 0
+            ax.set_xlim(left=0)
+            # ax.legend(loc='best', frameon=True, edgecolor='black', fancybox=False)
+            plt.tight_layout()
+
+            if save_plots:
+                map_clean = map_file.replace('.map', '').replace('-', '_')
+                output_file = self.output_dir / f"lns_sub_{map_clean}_{agents}_agents.pdf"
+                plt.savefig(output_file, dpi=300, bbox_inches='tight')
+                print(f"Saved LNS sub plot: {output_file}")
+                plt.close(fig)
+            else:
+                plt.show()
+            
+            figs[agents] = fig
+        
+        # Generate legend as separate PDF
+        if save_plots:
+            self.save_legend_as_pdf()
+        
+        return figs
     
     def plot_histogram(self, map_file: str, save_plots: bool = True):
         """Create histogram plots for a single map (flowtime/LB vs scenario number), one per agent count."""
@@ -543,10 +753,11 @@ class IndividualMapPlotter:
         map_name = MAPS.get(map_file, map_file.replace('.map', ''))
         
         # Create figure with proper size for publication (square for 1:1 aspect ratio)
-        fig, ax = plt.subplots(1, 1, figsize=(7.5, 8))
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         
         # First collect all data by algorithm
         algorithm_data = {}
+        algorithm_bounds = {}
         for alg_id in sorted(map_data['algorithm'].unique()):
             alg_data = map_data[map_data['algorithm'] == alg_id]
             # Group by agent count and take mean
@@ -560,29 +771,39 @@ class IndividualMapPlotter:
             
             grouped = alg_data.groupby('agents').agg(agg_dict).reset_index().sort_values('agents')
             
+            # Also calculate min/max bounds for flow_time_ratio
+            bounds_dict = {
+                'runtime': 'mean',
+                'flow_time_ratio': ['min', 'max']
+            }
+            bounds = alg_data.groupby('agents').agg(bounds_dict).reset_index().sort_values('agents')
+            # Flatten column names for bounds
+            bounds.columns = ['agents', 'runtime', 'flow_time_ratio_min', 'flow_time_ratio_max']
+            
             if not grouped.empty:
                 algorithm_data[alg_id] = grouped
+                algorithm_bounds[alg_id] = bounds
         
-        # Connect same agent counts across algorithms with gray dotted lines
-        if len(algorithm_data) >= 2:
-            all_agents = set()
-            for data in algorithm_data.values():
-                all_agents.update(data['agents'].values)
+        # # Connect same agent counts across algorithms with gray dotted lines
+        # if len(algorithm_data) >= 2:
+        #     all_agents = set()
+        #     for data in algorithm_data.values():
+        #         all_agents.update(data['agents'].values)
             
-            for agents in sorted(all_agents):
-                points = []
-                for alg_id in sorted(algorithm_data.keys()):
-                    alg_data = algorithm_data[alg_id]
-                    agent_data = alg_data[alg_data['agents'] == agents]
-                    if not agent_data.empty:
-                        points.append((agent_data['runtime'].iloc[0], agent_data['flow_time_ratio'].iloc[0]))
+        #     for agents in sorted(all_agents):
+        #         points = []
+        #         for alg_id in sorted(algorithm_data.keys()):
+        #             alg_data = algorithm_data[alg_id]
+        #             agent_data = alg_data[alg_data['agents'] == agents]
+        #             if not agent_data.empty:
+        #                 points.append((agent_data['runtime'].iloc[0], agent_data['flow_time_ratio'].iloc[0]))
                 
-                if len(points) >= 2:
-                    points.sort()  # Sort by runtime
-                    x_coords = [p[0] for p in points]
-                    y_coords = [p[1] for p in points]
-                    ax.plot(x_coords, y_coords, color='gray', linestyle=':', 
-                           linewidth=1, alpha=0.7, zorder=0)
+        #         if len(points) >= 2:
+        #             points.sort()  # Sort by runtime
+        #             x_coords = [p[0] for p in points]
+        #             y_coords = [p[1] for p in points]
+        #             ax.plot(x_coords, y_coords, color='gray', linestyle=':', 
+        #                    linewidth=1, alpha=0.7, zorder=0)
         
         # Plot each algorithm with agent count series connected by lines
         for alg_id in sorted(map_data['algorithm'].unique()):
@@ -590,41 +811,65 @@ class IndividualMapPlotter:
                 continue
                 
             grouped = algorithm_data[alg_id]
+            bounds = algorithm_bounds[alg_id]
             alg_name = ALGORITHMS.get(alg_id, alg_id)
             style = ALGORITHM_STYLES.get(alg_id, {"color": "black", "marker": "o", "linestyle": "-", "linewidth": 3})
             
-            # Plot with agent count series connected
-            ax.plot(grouped['runtime'], grouped['flow_time_ratio'], 
-                   marker=style['marker'], linestyle=style['linestyle'],
-                   color=style['color'], linewidth=style.get('linewidth', 3),
-                   markersize=style.get('markersize', 12), 
-                   markerfacecolor='white', markeredgecolor=style['color'],
-                   markeredgewidth=style.get('markeredgewidth', 2), 
-                   label=style.get('label', alg_name), zorder=2)
+            # Plot fill_between for min/max bounds
+            ax.fill_between(bounds['runtime'], bounds['flow_time_ratio_min'], bounds['flow_time_ratio_max'],
+                           color=style['color'], alpha=0.2, linewidth=0)
             
-            # Add agent count labels only for LaCAM
-            if alg_id == 'lacam':
-                for _, row in grouped.iterrows():
-                    agents = int(row["agents"])
-                    if agents == 1000:
-                        label_text = 'agents: 1000'
-                    else:
-                        label_text = str(agents)
+            # Calculate marker sizes based on agent count
+            base_markersize = style.get('markersize', 12)
+            agent_counts = grouped['agents'].values
+            min_agents = agent_counts.min() if len(agent_counts) > 0 else 1
+            max_agents = agent_counts.max() if len(agent_counts) > 0 else 1
+            
+            # Scale marker sizes: minimum 0.5x, maximum 2.0x of base size
+            if max_agents > min_agents:
+                marker_sizes = [base_markersize * (1.0 + 0.5 * (agents - min_agents) / (max_agents - min_agents)) 
+                               for agents in agent_counts]
+            else:
+                marker_sizes = [base_markersize] * len(agent_counts)
+            
+            # Plot points individually with varying sizes
+            for i, (_, row) in enumerate(grouped.iterrows()):
+                ax.scatter(row['runtime'], row['flow_time_ratio'],
+                          marker=style['marker'], s=marker_sizes[i]**2,  # s expects area (size squared)
+                          color=style['color'], 
+                          facecolor='white', edgecolor=style['color'],
+                          linewidth=style.get('markeredgewidth', 2),
+                          zorder=2)
+            
+            # Plot connecting lines (without markers to avoid duplication)
+            ax.plot(grouped['runtime'], grouped['flow_time_ratio'], 
+                   linestyle=style['linestyle'],
+                   color=style['color'], linewidth=style.get('linewidth', 3),
+                   label=style.get('label', alg_name), zorder=1)
+            
+            # # Add agent count labels only for LaCAM
+            # if alg_id == 'lacam':
+            #     for _, row in grouped.iterrows():
+            #         agents = int(row["agents"])
+            #         if agents == 1000:
+            #             label_text = 'agents: 1000'
+            #         else:
+            #             label_text = str(agents)
                     
-                    # Add comp_time_init if available
-                    if 'comp_time_init' in grouped.columns and pd.notna(row.get('comp_time_init')):
-                        comp_time_init = row['comp_time_init']
-                        label_text += f' (init: {comp_time_init:.1f})'
+            #         # Add comp_time_init if available
+            #         if 'comp_time_init' in grouped.columns and pd.notna(row.get('comp_time_init')):
+            #             comp_time_init = row['comp_time_init']
+            #             label_text += f' (init: {comp_time_init:.1f})'
                     
-                    ax.annotate(label_text, 
-                              (row['runtime'], row['flow_time_ratio']),
-                              xytext=(-24, 8), textcoords='offset points',
-                              fontsize=18, ha='left', va='bottom', zorder=3)
+            #         ax.annotate(label_text, 
+            #                   (row['runtime'], row['flow_time_ratio']),
+            #                   xytext=(20, -10), textcoords='offset points',
+            #                   fontsize=32, ha='left', va='bottom', zorder=3)
         
         # Formatting
-        ax.set_xlabel('runtime (sec)', fontweight='bold', fontsize=22)
-        ax.set_ylabel('flow time / LB', fontweight='bold', fontsize=22)
-        ax.set_title(f'{map_name} Map', fontweight='bold', fontsize=24, y=1.05)
+        # ax.set_xlabel('runtime (sec)', fontweight='bold', fontsize=22)
+        # ax.set_ylabel('flow time / LB', fontweight='bold', fontsize=22)
+        # ax.set_title(f'{map_name} Map', fontweight='bold', fontsize=24, y=1.05)
         
         # Ensure all spines are visible with proper thickness
         for spine in ax.spines.values():
@@ -635,8 +880,11 @@ class IndividualMapPlotter:
         # Grid styling
         ax.grid(True)
         
+        # Set tick label font size
+        ax.tick_params(axis='both', which='major', labelsize=32)
+        
         # Legend
-        ax.legend(loc='best', frameon=True, edgecolor='black', fancybox=False)
+        # ax.legend(loc='best', frameon=True, edgecolor='black', fancybox=False)
         
         # Set log scale for x-axis (runtime)
         # ax.set_xscale('log')
@@ -666,7 +914,8 @@ class IndividualMapPlotter:
                 x_margin_factor = 0.5  # 50% margin on each side for log scale
                 # x_left = x_min / (1 + x_margin_factor)
                 # x_right = x_max * (1 + x_margin_factor)
-                x_left = x_min - x_margin_factor
+                # x_left = x_min - x_margin_factor
+                x_left = -0.5
                 x_right = x_max + x_margin_factor
                 
                 ax.set_xlim(left=x_left, right=x_right)
@@ -677,8 +926,9 @@ class IndividualMapPlotter:
         
         if save_plots:
             # Save with map-specific filename
-            map_clean = map_file.replace('.map', '').replace('-', '_')
-            output_file = self.output_dir / f"runtime_vs_flow_ratio_{map_clean}.pdf"
+            # map_clean = map_file.replace('.map', '').replace('-', '_')
+            map_clean = map_file.replace('.map', '')
+            output_file = self.output_dir / f"time_flowtime_{map_clean}.pdf"
             plt.savefig(output_file, dpi=300, bbox_inches='tight', 
                        facecolor='white', edgecolor='black')
             print(f"Saved plot: {output_file}")
@@ -688,7 +938,7 @@ class IndividualMapPlotter:
         
         return fig
     
-    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False, lns_mode: bool = False):
+    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False, lns_mode: bool = False, lns_sub_mode: bool = False):
         """Generate individual plots for all available maps."""
         
         available_maps = self.df['map'].unique()
@@ -696,6 +946,8 @@ class IndividualMapPlotter:
             plot_type = "LNS scatter"
         elif histogram_mode:
             plot_type = "histogram"
+        elif lns_sub_mode:
+            plot_type = "LNS sub"
         else:
             plot_type = "runtime vs flow ratio"
         print(f"Generating {plot_type} plots for {len(available_maps)} maps...")
@@ -707,6 +959,8 @@ class IndividualMapPlotter:
                 fig = self.plot_lns_scatter(map_file, save_plots)
             elif histogram_mode:
                 fig = self.plot_histogram(map_file, save_plots)
+            elif lns_sub_mode:
+                fig = self.plot_lns_sub(map_file, save_plots)
             else:
                 fig = self.plot_individual_map(map_file, save_plots)
             if fig:
@@ -734,11 +988,86 @@ class IndividualMapPlotter:
         print(f"Summary table saved to {summary_file}")
         
         return summary
+    
+    def save_legend_as_pdf(self, save_plots: bool = True):
+        """Generate and save the legend as a separate PDF file."""
+        
+        # Create a temporary figure just for the legend
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        
+        # Get unique algorithms from the data
+        available_algorithms = set(self.df['algorithm'].unique())
+        
+        # Define desired order for legend
+        legend_order = ['lacam', 'gg_lacam', 'lg_lacam', 'lg&gg_lacam', 'lns2']
+        
+        # Create legend entries for each algorithm present in the data
+        legend_handles = []
+        legend_labels = []
+        
+        # First add algorithms in the specified order
+        for alg_id in legend_order:
+            if alg_id in available_algorithms:
+                style = ALGORITHM_STYLES.get(alg_id, {"color": "black", "marker": "o", "linestyle": "-"})
+                
+                # Create a line2D object for the legend
+                from matplotlib.lines import Line2D
+                legend_line = Line2D([0], [0], 
+                                   color=style['color'], 
+                                   marker=style['marker'],
+                                   linestyle=style['linestyle'],
+                                   linewidth=style.get('linewidth', 5),
+                                   markersize=style.get('markersize', 24),
+                                   markerfacecolor='white',
+                                   markeredgecolor=style['color'],
+                                   markeredgewidth=style.get('markeredgewidth', 3))
+                
+                legend_handles.append(legend_line)
+                legend_labels.append(style.get('label', alg_id))
+        
+        # Add any remaining algorithms not in the specified order
+        for alg_id in sorted(available_algorithms - set(legend_order)):
+            style = ALGORITHM_STYLES.get(alg_id, {"color": "black", "marker": "o", "linestyle": "-"})
+            
+            # Create a line2D object for the legend
+            from matplotlib.lines import Line2D
+            legend_line = Line2D([0], [0], 
+                               color=style['color'], 
+                               marker=style['marker'],
+                               linestyle=style['linestyle'],
+                               linewidth=style.get('linewidth', 5),
+                               markersize=style.get('markersize', 24),
+                               markerfacecolor='white',
+                               markeredgecolor=style['color'],
+                               markeredgewidth=style.get('markeredgewidth', 3))
+            
+            legend_handles.append(legend_line)
+            legend_labels.append(style.get('label', alg_id))
+        
+        # Remove the axes
+        ax.remove()
+        
+        # Create legend - arrange all items horizontally in a single row, no frame
+        figlegend = plt.figlegend(legend_handles, legend_labels, 
+                                 loc='center', ncol=len(legend_labels), frameon=False, 
+                                 fontsize=16)
+        
+        if save_plots:
+            # Save legend as PDF
+            output_file = self.output_dir / "legend.pdf"
+            plt.savefig(output_file, dpi=300, bbox_inches='tight', 
+                       facecolor='white', edgecolor='black')
+            print(f"Saved legend: {output_file}")
+            plt.close()
+        else:
+            plt.show()
+        
+        return fig
 
 def main():
     parser = argparse.ArgumentParser(description="Generate individual map benchmark plots")
     parser.add_argument("results_file", 
-                       help="Path to benchmark results CSV or JSON file")
+                       help="Path to benchmark results CSV or JSON file, or base name for timespan files")
     parser.add_argument("--output-dir", default="individual_plots",
                        help="Output directory for plots")
     parser.add_argument("--map", 
@@ -747,28 +1076,51 @@ def main():
                        help="Generate histogram plot (flowtime/LB vs scenario number)")
     parser.add_argument("--lns", action="store_true",
                        help="Generate LNS scatter plot (comp_time_init vs Flow Time/LB)")
+    parser.add_argument("--lns-sub", action="store_true",
+                       help="Generate LNS sub plot (runtime vs flow_time_ratio)")
+    parser.add_argument("--legend", action="store_true",
+                       help="Generate legend as separate PDF file")
     
     args = parser.parse_args()
     
-    if not Path(args.results_file).exists():
-        print(f"Results file not found: {args.results_file}")
-        return 1
+    results_path = Path(args.results_file)
+    
+    # Check if the file exists directly, or if timespan files exist
+    if not results_path.exists():
+        # Check if timespan files exist
+        timespan_files = list(results_path.parent.glob(f"{results_path.stem}_timespan_*.csv"))
+        if not timespan_files:
+            timespan_files = list(results_path.parent.glob(f"{results_path.stem}_timespan_*.json"))
+        
+        if not timespan_files:
+            print(f"Results file not found: {args.results_file}")
+            print(f"Also checked for timespan files: {results_path.parent}/{results_path.stem}_timespan_*.csv")
+            return 1
     
     plotter = IndividualMapPlotter(args.results_file, args.output_dir)
     
-    if args.map:
+    if args.legend:
+        # Generate legend only
+        plotter.save_legend_as_pdf()
+    elif args.map:
         # Plot specific map
         if args.lns:
             plotter.plot_lns_scatter(args.map)
         elif args.histogram:
             plotter.plot_histogram(args.map)
+        elif args.lns_sub:
+            plotter.plot_lns_sub(args.map)
         else:
             plotter.plot_individual_map(args.map)
     else:
         # Plot all maps
-        plotter.plot_all_individual_maps(histogram_mode=args.histogram, lns_mode=args.lns)
-        if not args.histogram and not args.lns:
+        plotter.plot_all_individual_maps(histogram_mode=args.histogram, lns_mode=args.lns, lns_sub_mode=args.lns_sub)
+        if not args.histogram and not args.lns and not args.lns_sub:
             plotter.generate_summary_table_by_map()
+    
+    # Always generate legend when plotting (unless only legend was requested)
+    if not args.legend:
+        plotter.save_legend_as_pdf()
     
     return 0
 

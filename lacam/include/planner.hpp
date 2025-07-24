@@ -12,9 +12,10 @@
 
 struct SolveResult {
   Solution solution;
+  Solution solution_init;
   LaCAM* lacam;
   double comp_time_init_ms;  // Initial solution computation time (LocalGuide)
-};
+};;
 
 std::pair<Solution, LaCAM*> solve(const Instance &ins, const int verbose = 0,
                const Deadline *deadline = nullptr, int seed = 0, bool use_sipp = false);

@@ -107,7 +107,7 @@ class BenchmarkRunner:
         return sorted(scenarios)[:self.num_scenarios]  # Use specified number of scenarios per map
     
     def run_single_experiment(self, algorithm: str, map_config: Dict, scenario: str, 
-                            agent_count: int) -> Optional[Dict]:
+                            agent_count: int, timespan: int = 20) -> Optional[Dict]:
         """Run a single experiment for given parameters."""
         alg_config = self.config["algorithms"][algorithm]
         
@@ -145,6 +145,7 @@ class BenchmarkRunner:
                 scenario=scenario,
                 map_file=str(map_path),
                 agents=agent_count,
+                timespan=timespan,
                 result_file_base=result_file_base
             )
         else:
@@ -152,6 +153,7 @@ class BenchmarkRunner:
                 scenario=scenario,
                 map_file=str(map_path),
                 agents=agent_count,
+                timespan=timespan,
                 result_file=result_file
             )
         
@@ -180,7 +182,7 @@ class BenchmarkRunner:
                 lns2_csv_file = Path(result_file_base + "-LNS.csv")
                 if lns2_csv_file.exists():
                     result_data = self.parse_result_file(lns2_csv_file, algorithm, map_name, 
-                                                       scenario, agent_count, end_time - start_time)
+                                                       scenario, agent_count, end_time - start_time, timespan)
                     # Clean up result file after parsing
                     try:
                         lns2_csv_file.unlink()
@@ -193,12 +195,12 @@ class BenchmarkRunner:
             elif algorithm == "guided_lacam2":
                 # guided_lacam2 outputs to stdout, parse directly
                 return self.parse_guided_lacam2_stdout(result.stdout, algorithm, map_name,
-                                                     scenario, agent_count, end_time - start_time)
+                                                     scenario, agent_count, end_time - start_time, timespan)
             else:
                 result_file_path = Path(result_file)
                 if result_file_path.exists():
                     result_data = self.parse_result_file(result_file_path, algorithm, map_name, 
-                                                       scenario, agent_count, end_time - start_time)
+                                                       scenario, agent_count, end_time - start_time, timespan)
                     # Clean up result file after parsing
                     try:
                         result_file_path.unlink()
@@ -216,12 +218,14 @@ class BenchmarkRunner:
                 "map": map_name,
                 "scenario": os.path.basename(scenario),
                 "agents": agent_count,
+                "timespan": timespan,
                 "runtime": self.timeout,
                 "success": False,
                 "timeout": True,
                 "flow_time": None,
                 "lower_bound": None,
                 "flow_time_ratio": None,
+                "flow_time_init_ratio": None,
                 "comp_time_init": None
             }
         except Exception as e:
@@ -229,7 +233,7 @@ class BenchmarkRunner:
             return None
     
     def parse_result_file(self, result_file: Path, algorithm: str, map_name: str,
-                         scenario: str, agent_count: int, runtime: float) -> Dict:
+                         scenario: str, agent_count: int, runtime: float, timespan: int = 20) -> Dict:
         """Parse the result file to extract metrics."""
         
         try:
@@ -241,12 +245,15 @@ class BenchmarkRunner:
                 "map": map_name,
                 "scenario": os.path.basename(scenario),
                 "agents": agent_count,
+                "timespan": timespan,
                 "runtime": runtime,
                 "success": False,
                 "timeout": False,
                 "flow_time": None,
+                "flow_time_init": None,
                 "lower_bound": None,
                 "flow_time_ratio": None,
+                "flow_time_init_ratio": None,
                 "makespan": None,
                 "makespan_lb": None,
                 "comp_time_init": None
@@ -287,6 +294,8 @@ class BenchmarkRunner:
                 result_data['flow_time'] = int(line.split('=')[1])
             elif line.startswith('soc_lb='):
                 result_data['lower_bound'] = int(line.split('=')[1])
+            elif line.startswith('soc_init='):
+                result_data['flow_time_init'] = int(line.split('=')[1])
             elif line.startswith('makespan='):
                 result_data['makespan'] = int(line.split('=')[1])
             elif line.startswith('makespan_lb='):
@@ -301,6 +310,8 @@ class BenchmarkRunner:
         # Calculate flow time ratio
         if result_data['flow_time'] and result_data['lower_bound'] and result_data['lower_bound'] > 0:
             result_data['flow_time_ratio'] = result_data['flow_time'] / result_data['lower_bound']
+        if result_data['flow_time_init'] and result_data['lower_bound'] and result_data['lower_bound'] > 0:
+            result_data['flow_time_init_ratio'] = result_data['flow_time_init'] / result_data['lower_bound']
         
         return result_data
     
@@ -357,13 +368,14 @@ class BenchmarkRunner:
         return self.parse_lg_lacam_result(content, result_data)
     
     def parse_guided_lacam2_stdout(self, stdout: str, algorithm: str, map_name: str,
-                                 scenario: str, agent_count: int, runtime: float) -> Dict:
+                                 scenario: str, agent_count: int, runtime: float, timespan: int = 20) -> Dict:
         """Parse guided_lacam2 stdout output format."""
         result_data = {
             "algorithm": algorithm,
             "map": map_name,
             "scenario": os.path.basename(scenario),
             "agents": agent_count,
+            "timespan": timespan,
             "runtime": runtime,
             "success": False,
             "timeout": False,
@@ -416,12 +428,15 @@ class BenchmarkRunner:
         if agent_counts is None:
             agent_counts = self.config["agent_counts"]
         
+        # Get timespan values from config
+        timespans = self.config.get("timespan", [20])
+        
         # Create map lookup
         map_configs = {m["name"]: m for m in self.config["maps"]}
         
         results = []
-        total_experiments = len(algorithms) * len(maps) * len(agent_counts) * self.num_scenarios
-        print("algorithms:", len(algorithms), ", maps:", len(maps), ", agent_counts:", len(agent_counts), ", scenarios:", self.num_scenarios)
+        total_experiments = len(algorithms) * len(maps) * len(agent_counts) * len(timespans) * self.num_scenarios
+        print("algorithms:", len(algorithms), ", maps:", len(maps), ", agent_counts:", len(agent_counts), ", timespans:", len(timespans), ", scenarios:", self.num_scenarios)
         current_experiment = 0
         
         for algorithm in algorithms:
@@ -442,18 +457,19 @@ class BenchmarkRunner:
                     continue
                 
                 for agent_count in agent_counts:
-                    for scenario in scenarios:
-                        current_experiment += 1
-                        print(f"\nExperiment {current_experiment}/{total_experiments}")
-                        print(f"Algorithm: {algorithm}, Map: {map_name}, "
-                              f"Agents: {agent_count}, Scenario: {os.path.basename(scenario)}")
-                        
-                        result = self.run_single_experiment(
-                            algorithm, map_config, scenario, agent_count
-                        )
-                        
-                        if result:
-                            results.append(result)
+                    for timespan in timespans:
+                        for scenario in scenarios:
+                            current_experiment += 1
+                            print(f"\nExperiment {current_experiment}/{total_experiments}")
+                            print(f"Algorithm: {algorithm}, Map: {map_name}, "
+                                  f"Agents: {agent_count}, Timespan: {timespan}, Scenario: {os.path.basename(scenario)}")
+                            
+                            result = self.run_single_experiment(
+                                algorithm, map_config, scenario, agent_count, timespan
+                            )
+                            
+                            if result:
+                                results.append(result)
         
         # Save results
         self.save_results(results)
@@ -461,27 +477,56 @@ class BenchmarkRunner:
     
     def save_results(self, results: List[Dict]):
         """Save benchmark results to CSV file."""
-        output_file = self.output_dir / "benchmark_results.csv"
-        
         if not results:
             print("No results to save")
             return
         
+        # Group results by timespan and save separate files for each
+        timespan_results = {}
+        for result in results:
+            timespan = result.get("timespan", 20)
+            if timespan not in timespan_results:
+                timespan_results[timespan] = []
+            timespan_results[timespan].append(result)
+        
+        # Save separate files for each timespan
+        for timespan, timespan_data in timespan_results.items():
+            output_file = self.output_dir / f"benchmark_results_timespan_{timespan}.csv"
+            json_file = self.output_dir / f"benchmark_results_timespan_{timespan}.json"
+            
+            fieldnames = timespan_data[0].keys()
+            
+            with open(output_file, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(timespan_data)
+            
+            print(f"Results for timespan {timespan} saved to {output_file}")
+            
+            # Also save as JSON
+            with open(json_file, 'w') as f:
+                json.dump(timespan_data, f, indent=2)
+            
+            print(f"Results for timespan {timespan} also saved to {json_file}")
+        
+        # Also save combined results
+        combined_output_file = self.output_dir / "benchmark_results_combined.csv"
+        combined_json_file = self.output_dir / "benchmark_results_combined.json"
+        
         fieldnames = results[0].keys()
         
-        with open(output_file, 'w', newline='') as csvfile:
+        with open(combined_output_file, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
         
-        print(f"Results saved to {output_file}")
+        print(f"Combined results saved to {combined_output_file}")
         
         # Also save as JSON
-        json_file = self.output_dir / "benchmark_results.json"
-        with open(json_file, 'w') as f:
+        with open(combined_json_file, 'w') as f:
             json.dump(results, f, indent=2)
         
-        print(f"Results also saved to {json_file}")
+        print(f"Combined results also saved to {combined_json_file}")
 
 def main():
     parser = argparse.ArgumentParser(description="Run MAPF benchmark experiments")

@@ -13,8 +13,9 @@ int LocalGuide::WINDOW = 10;
 int LocalGuide::NUM_REFINE = 1;
 float LocalGuide::COLLISION_COST = 1.0f;
 float LocalGuide::COLLISION_COST_ORDER = 1e-7;
-float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-2;
-float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-4;
+bool LocalGuide::GLOBAL_GUIDE_ON = false;
+float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-5;
+float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-9;
 bool LocalGuide::ENABLE_COLLISION_SORT = false;
 bool LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = false;
 bool LocalGuide::ENABLE_K_STEP_UPDATE = false;
@@ -151,13 +152,15 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
     n->h = D->get(who, where);
     
-    if (ENABLE_OPTIMIZED_GUIDANCE) {
-      if (parent != nullptr) {
-        n->g += GLOBAL_GUIDE_FIRST_ORDER * global_guide->get_simple(who, parent->where, where);;
+    if (GLOBAL_GUIDE_ON){
+      if (ENABLE_OPTIMIZED_GUIDANCE) {
+        if (parent != nullptr) {
+          n->g += GLOBAL_GUIDE_FIRST_ORDER * global_guide->get_simple(who, parent->where, where);;
+        }
+      } else {
+        auto&& gg_h = global_guide->get(who, where);
+        n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
       }
-    } else {
-      auto&& gg_h = global_guide->get(who, where);
-      n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
     }
 
     n->f = n->g + n->h;

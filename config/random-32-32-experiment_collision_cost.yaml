@@ -3,16 +3,16 @@
 
 # Basic fixed parameters
 i:
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-1.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-2.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-3.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-4.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-5.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-6.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-7.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-8.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-9.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-10.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-1.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-2.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-3.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-4.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-5.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-6.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-7.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-8.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-9.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-10.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-11.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-12.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-13.scen
@@ -29,16 +29,16 @@ i:
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-24.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-25.scen
 m:
-  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
@@ -55,7 +55,6 @@ m:
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   
-# N: [100, 200, 300, 400]
 N: 400
 v: 3
 
@@ -66,25 +65,26 @@ baseline_with_gg:
   lg: false
   gg: true
 
-# "&N_lg_k_step_interval_collab": 
+# "&N_lg_collision_cost_collab": 
 #   properties:
 #     - N
-#     - lg_k_step_interval
-"&lg_window_k_step_interval_collab": 
+#     - lg_collision_cost
+
+"&lg_window_collision_cost_collab": 
   properties:
     - lg_window
-    - lg_k_step_interval
+    - lg_collision_cost
 
 # LG parameters
 lg: true
 gg: false
-# lg_window: 15
-lg_k_step_update: true
-lg_k_step_interval: [1, 2, 3]
-# lg_num_refine: [1, 2, 3]
-lg_window: [8, 12, 16, 20]
+# lg_window: 6
+# lg_num_refine: [0, 1, 2, 3]
+# lg_window: [4, 8, 12, 16, 20]
+# lg_window: [6, 7, 8, 15, 20]
+lg_window: [5, 10, 15, 20]
+lg_collision_cost: [0.0, 1.0, 2.0, 3.0, 4.0]
 # lg_collision_sort: true
-lg_collision_cost: 2.5
 # lns: true
 # time_limit_sec: 2
 
@@ -95,27 +95,13 @@ time_limit_sec: 20
 # Plot settings
 plot_settings:
   mode: violin
-  line: lg_k_step_interval
+  line: lg_window
   hide_scatter: true
   hide_data_label: false
   violin_params:
+    # y_axis: soc_normalized
     y_axis: benchmark_normalized
     title: title
-    x_label: x_label
-    y_label: y_label
+    x_label: null
+    y_label: null
     orient: vertical
-
-# plot_settings:
-#   mode: violin
-#   line: N
-#   hide_scatter: true
-#   hide_data_label: true
-#   violin_params:
-#     # y_axis: soc_normalized
-#     y_axis: benchmark_normalized
-#     x_axis: lg_num_refine
-#     title: title
-#     x_label: x_label
-#     x_type: int
-#     y_label: y_label
-#     orient: vertical
