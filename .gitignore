@@ -59,6 +59,6 @@ benchmark/backup
 heatmap/
 random-32-32-20/
 */.claude
-
+.claude
 venv
 __pycache__
