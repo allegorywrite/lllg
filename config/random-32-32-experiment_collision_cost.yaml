@@ -82,7 +82,7 @@ gg: false
 # lg_num_refine: [0, 1, 2, 3]
 # lg_window: [4, 8, 12, 16, 20]
 # lg_window: [6, 7, 8, 15, 20]
-lg_window: [5, 10, 15, 20]
+lg_window: [5, 10, 15, 20, 25, 30]
 lg_collision_cost: [0.0, 1.0, 2.0, 3.0, 4.0]
 # lg_collision_sort: true
 # lns: true

@@ -82,7 +82,7 @@ gg: false
 lg_k_step_update: true
 lg_k_step_interval: [1, 2, 3]
 # lg_num_refine: [1, 2, 3]
-lg_window: [8, 12, 16, 20]
+lg_window: [8, 12, 16, 20, 24, 28]
 # lg_collision_sort: true
 lg_collision_cost: 2.5
 # lns: true

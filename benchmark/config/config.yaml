@@ -79,6 +79,13 @@ algorithms:
     result_file_template: "benchmark_results/lns2/result_{algorithm}_{map_base}_{agents}_{scenario_base}"
     available: true
     
+  lacam3:
+    name: "LaCAM3"
+    executable: "third_party/lacam3/build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 20 -o {result_file}"
+    result_file_template: "benchmark_results/lacam3/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+    
   # lns:
   #   name: "LNS"
   #   executable: "../build/main"

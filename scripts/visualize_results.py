@@ -140,7 +140,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
         
         # 各line_propertyの値について、他のプロパティでソートして線を引く
         # color_indexに基づいてbase_colorsから色を選択
-        base_colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        base_colors = ['red', 'blue', 'green', 'orange', 'purple', 'hotpink', 'gray', 'olive', 'cyan']
         colors = []
         for j in range(len(base_colors)):
             colors.append(base_colors[(color_index + j) % len(base_colors)])
@@ -204,7 +204,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
 
             # legendがnullの場合は数字のみ表示
             if custom_legend is None:
-                label_text = str(label_value)
+                label_text = str(label_value) + " agents"
             else:
                 legend_property_name = custom_legend if custom_legend else line_property
                 label_text = f'{legend_property_name}={label_value}'
@@ -315,7 +315,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
         
         # 各line_propertyの値について線を引く
         # color_indexに基づいてbase_colorsから色を選択
-        base_colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        base_colors = ['red', 'blue', 'green', 'orange', 'purple', 'pink', 'gray', 'olive', 'cyan']
         colors = []
         for j in range(len(base_colors)):
             colors.append(base_colors[(color_index + j) % len(base_colors)])
@@ -427,7 +427,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
                                zorder=15)
     
     # 凡例を更新
-    plt.legend(loc='best')
+    # plt.legend(loc='best')
 
 def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None):
     """バイオリンプロットを作成する"""
@@ -676,7 +676,7 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
         # 明確に区別できる色パレットを定義
         base_colors = [
             'red', 'blue', 'green', 'orange', 'purple', 
-            'brown', 'pink', 'gray', 'olive', 'cyan'
+            'pink', 'gray', 'olive', 'cyan'
         ]
         
         # color_indexに基づいてベース色を選択し、その色系統のパレットを作成
@@ -1062,11 +1062,11 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
         x_margin = x_range * 0.05 if x_range > 0 else 1
         y_margin = y_range * 0.05 if y_range > 0 else 0.1
         
-        # ax.set_xlim(x_min - x_margin, x_max + x_margin)
         ax.set_xlim(x_min - x_margin, x_max + x_margin)
+        # ax.set_xlim(x_min - x_margin, x_max + x_margin)
         # ax.set_ylim(0.6,  1.5)
         # ax.set_ylim(0, y_max + y_margin)
-        ax.set_ylim(0, 2500)
+        # ax.set_ylim(0, 2500)
         # ax.set_xlim(x_min, x_max)
         # ax.set_ylim(y_min, y_max)
 

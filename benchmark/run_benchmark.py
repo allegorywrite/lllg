@@ -268,6 +268,10 @@ class BenchmarkRunner:
                 return self.parse_lg_lacam_result(content, result_data)
             if algorithm == "lns":
                 return self.parse_lg_lacam_result(content, result_data)
+            elif algorithm == "lacam3_lns":
+                return self.parse_lacam_result(content, result_data)
+            elif algorithm == "lacam3":
+                return self.parse_lacam_result(content, result_data)
             elif algorithm == "eecbs_f":
                 return self.parse_eecbs_f_result(content, result_data)
             elif algorithm == "lns2":

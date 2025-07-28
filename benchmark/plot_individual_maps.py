@@ -139,6 +139,33 @@ ALGORITHM_STYLES = {
         "markersize": 14,       # Data point size
         "markeredgewidth": 3,   # Data point border thickness
         "label": "LNS"
+    },
+    "lacam3": {
+        "color": "#FF4500",     # Orange Red
+        "marker": "s",          # Square
+        "linestyle": "-",       # Solid line
+        "linewidth": 5,         # Line thickness
+        "markersize": 16,       # Data point size
+        "markeredgewidth": 3,   # Data point border thickness
+        "label": "LaCAM3"
+    },
+    "lacam3_lns": {
+        "color": "#FF8C00",     # Dark Orange
+        "marker": "s",          # Square
+        "linestyle": "-",      # Dashed line
+        "linewidth": 5,         # Line thickness
+        "markersize": 16,       # Data point size
+        "markeredgewidth": 3,   # Data point border thickness
+        "label": "LaCAM3-LNS"
+    },
+    "lg_lacam_lns": {
+        "color": "#4169E1",     # Royal Blue
+        "marker": "*",          # Star
+        "linestyle": "-",      # Dashed line
+        "linewidth": 5,         # Line thickness
+        "markersize": 28,       # Data point size
+        "markeredgewidth": 3,   # Data point border thickness
+        "label": "LG-LNS"
     }
 }
 
@@ -150,7 +177,10 @@ ALGORITHMS = {
     "lg&gg_lacam": "LG+GG",
     "lacam": "LaCAM",
     "eecbs_f": "EECBS-f", 
-    "lns2": "LNS2"
+    "lns2": "LNS2",
+    "lacam3": "LaCAM3",
+    "lacam3_lns": "LaCAM3-LNS",
+    "lg_lacam_lns": "LG-LNS"
 }
 
 MAPS = {
@@ -456,7 +486,7 @@ class IndividualMapPlotter:
         figs = {}
 
         for agents in agent_counts:
-            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
             agent_data = map_data[map_data['agents'] == agents]
 
             for alg_id in sorted(agent_data['algorithm'].unique()):
@@ -580,6 +610,34 @@ class IndividualMapPlotter:
             ax.grid(True)
             # Set x-axis lower limit to 0
             ax.set_xlim(left=0)
+            
+            # Set y-axis limits with margin
+            if not agent_data.empty:
+                # Collect all y-values from the plot data
+                all_y_values = []
+                for alg_id in sorted(agent_data['algorithm'].unique()):
+                    alg_data = agent_data[agent_data['algorithm'] == alg_id]
+                    if alg_data.empty:
+                        continue
+                    
+                    if 'timespan' in alg_data.columns and alg_data['timespan'].notna().any():
+                        # For timespan data, include all flow_time_ratio values
+                        all_y_values.extend(alg_data['flow_time_ratio'].tolist())
+                        # Also include flow_time_init/lower_bound values
+                        flow_time_init_ratios = alg_data['flow_time_init'] / alg_data['lower_bound']
+                        all_y_values.extend(flow_time_init_ratios.tolist())
+                    else:
+                        # For non-timespan data, include flow_time_ratio and flow_time_init ratio
+                        all_y_values.extend(alg_data['flow_time_ratio'].tolist())
+                        flow_time_init_ratios = alg_data['flow_time_init'] / alg_data['lower_bound']
+                        all_y_values.extend(flow_time_init_ratios.tolist())
+                
+                if all_y_values:
+                    y_min = min(all_y_values)
+                    y_max = max(all_y_values)
+                    y_margin = (y_max - y_min) * 0.3  # 10% margin
+                    ax.set_ylim(bottom=y_min - y_margin/4, top=y_max + y_margin/4)
+            
             # ax.legend(loc='best', frameon=True, edgecolor='black', fancybox=False)
             plt.tight_layout()
 
@@ -742,7 +800,7 @@ class IndividualMapPlotter:
         
         return fig
 
-    def plot_individual_map(self, map_file: str, save_plots: bool = True):
+    def plot_individual_map(self, map_file: str, save_plots: bool = True, markers_by_agents: bool = False, lns_line: bool = False):
         """Create runtime vs flow time ratio plot for a single map."""
         
         map_data = self.df[self.df['map'] == map_file]
@@ -754,6 +812,14 @@ class IndividualMapPlotter:
         
         # Create figure with proper size for publication (square for 1:1 aspect ratio)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+        
+        # Define markers for agent counts (if markers_by_agents is True)
+        if markers_by_agents:
+            # agent_markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h', 'H', '+', 'x', '|', '_']
+            agent_markers = ['X', 'o', '^', 's', '*', '<', '>', 'p', '*', 'h', 'H', '+', 'x', '|', '_']
+            agent_markers_size = [22, 22, 22, 20, 32]
+            # Get all unique agent counts across all algorithms
+            all_agent_counts = sorted(set(map_data['agents'].unique()))
         
         # First collect all data by algorithm
         algorithm_data = {}
@@ -784,26 +850,24 @@ class IndividualMapPlotter:
                 algorithm_data[alg_id] = grouped
                 algorithm_bounds[alg_id] = bounds
         
-        # # Connect same agent counts across algorithms with gray dotted lines
-        # if len(algorithm_data) >= 2:
-        #     all_agents = set()
-        #     for data in algorithm_data.values():
-        #         all_agents.update(data['agents'].values)
+        # Collect points for later connection (after axis scaling is set)
+        agent_points_data = {}
+        if len(algorithm_data) >= 2:
+            all_agents = set()
+            for data in algorithm_data.values():
+                all_agents.update(data['agents'].values)
             
-        #     for agents in sorted(all_agents):
-        #         points = []
-        #         for alg_id in sorted(algorithm_data.keys()):
-        #             alg_data = algorithm_data[alg_id]
-        #             agent_data = alg_data[alg_data['agents'] == agents]
-        #             if not agent_data.empty:
-        #                 points.append((agent_data['runtime'].iloc[0], agent_data['flow_time_ratio'].iloc[0]))
+            for agents in sorted(all_agents):
+                points_with_alg = []
+                for alg_id in sorted(algorithm_data.keys()):
+                    alg_data = algorithm_data[alg_id]
+                    agent_data = alg_data[alg_data['agents'] == agents]
+                    if not agent_data.empty:
+                        point = (agent_data['runtime'].iloc[0], agent_data['flow_time_ratio'].iloc[0])
+                        points_with_alg.append((point, alg_id))
                 
-        #         if len(points) >= 2:
-        #             points.sort()  # Sort by runtime
-        #             x_coords = [p[0] for p in points]
-        #             y_coords = [p[1] for p in points]
-        #             ax.plot(x_coords, y_coords, color='gray', linestyle=':', 
-        #                    linewidth=1, alpha=0.7, zorder=0)
+                if len(points_with_alg) >= 2:
+                    agent_points_data[agents] = points_with_alg
         
         # Plot each algorithm with agent count series connected by lines
         for alg_id in sorted(map_data['algorithm'].unique()):
@@ -819,23 +883,24 @@ class IndividualMapPlotter:
             ax.fill_between(bounds['runtime'], bounds['flow_time_ratio_min'], bounds['flow_time_ratio_max'],
                            color=style['color'], alpha=0.2, linewidth=0)
             
-            # Calculate marker sizes based on agent count
-            base_markersize = style.get('markersize', 12)
-            agent_counts = grouped['agents'].values
-            min_agents = agent_counts.min() if len(agent_counts) > 0 else 1
-            max_agents = agent_counts.max() if len(agent_counts) > 0 else 1
-            
-            # Scale marker sizes: minimum 0.5x, maximum 2.0x of base size
-            if max_agents > min_agents:
-                marker_sizes = [base_markersize * (1.0 + 0.5 * (agents - min_agents) / (max_agents - min_agents)) 
-                               for agents in agent_counts]
-            else:
-                marker_sizes = [base_markersize] * len(agent_counts)
+            # Use consistent marker size for all methods
+            base_markersize = 20  # Fixed size for all methods
+            marker_sizes = [base_markersize] * len(grouped)
             
             # Plot points individually with varying sizes
             for i, (_, row) in enumerate(grouped.iterrows()):
+                # Choose marker based on option
+                if markers_by_agents:
+                    # Use agent count to determine marker
+                    agent_idx = all_agent_counts.index(row['agents'])
+                    marker = agent_markers[agent_idx % len(agent_markers)]
+                    marker_size = agent_markers_size[agent_idx % len(agent_markers)]
+                else:
+                    marker = style['marker']
+                    marker_size = base_markersize
+                
                 ax.scatter(row['runtime'], row['flow_time_ratio'],
-                          marker=style['marker'], s=marker_sizes[i]**2,  # s expects area (size squared)
+                          marker=marker, s=marker_size**2,  # s expects area (size squared)
                           color=style['color'], 
                           facecolor='white', edgecolor=style['color'],
                           linewidth=style.get('markeredgewidth', 2),
@@ -892,11 +957,14 @@ class IndividualMapPlotter:
         # Set equal aspect ratio (1:1)
         # ax.set_aspect('equal', adjustable='box')
         
-        # Set reasonable axis limits to include all data points
-        if not map_data.empty:
-            # Get min and max from all actual data points (not just grouped means)
-            all_flow_ratios = map_data['flow_time_ratio'].tolist()
-            all_runtimes = map_data['runtime'].tolist()
+        # Set reasonable axis limits based on grouped mean values
+        if algorithm_data:
+            # Get min and max from grouped mean values (not all individual data points)
+            all_flow_ratios = []
+            all_runtimes = []
+            for grouped in algorithm_data.values():
+                all_flow_ratios.extend(grouped['flow_time_ratio'].tolist())
+                all_runtimes.extend(grouped['runtime'].tolist())
             
             if all_flow_ratios and all_runtimes:
                 # Calculate proper limits with margins
@@ -907,19 +975,110 @@ class IndividualMapPlotter:
                 
                 # Add margins: 10% for y-axis, log-friendly margins for x-axis
                 y_margin = (y_max - y_min) * 0.1
-                y_bottom = max(1.0, y_min - y_margin)
+                # y_bottom = max(1.0, y_min - y_margin)
+                y_bottom = y_min - y_margin
                 y_top = y_max + y_margin
                 
                 # For log scale, use multiplicative margins
-                x_margin_factor = 0.5  # 50% margin on each side for log scale
+                # x_margin_factor = 0.5  # 50% margin on each side for log scale
                 # x_left = x_min / (1 + x_margin_factor)
                 # x_right = x_max * (1 + x_margin_factor)
                 # x_left = x_min - x_margin_factor
-                x_left = -0.5
-                x_right = x_max + x_margin_factor
+                # x_left = -0.5
+                # x_right = x_max + x_margin_factor
+
+                x_margin = (x_max - x_min) * 0.1
+                # x_bottom = max(1.0, x_min - x_margin)
+                x_bottom = - x_margin
+                x_top = x_max + x_margin
                 
-                ax.set_xlim(left=x_left, right=x_right)
+                ax.set_xlim(left=x_bottom, right=x_top)
                 ax.set_ylim(bottom=y_bottom, top=y_top)
+        
+        # Connect same agent counts across algorithms with gray dotted lines (after axis scaling)
+        if agent_points_data:
+            import math
+            
+            # Get axis limits for normalization
+            x_min, x_max = ax.get_xlim()
+            y_min, y_max = ax.get_ylim()
+            
+            # Calculate agent count range for line thickness scaling
+            all_agent_counts = list(agent_points_data.keys())
+            min_agents = min(all_agent_counts) if all_agent_counts else 1
+            max_agents = max(all_agent_counts) if all_agent_counts else 1
+            
+            def polar_angle_normalized(point):
+                x, y = point
+                # Normalize coordinates to [0,1] based on axis limits
+                x_norm = (x - x_min) / (x_max - x_min) if x_max > x_min else 0
+                y_norm = (y - y_min) / (y_max - y_min) if y_max > y_min else 0
+                return math.atan2(y_norm, x_norm)
+            
+            for agents, points_with_alg in agent_points_data.items():
+                # Sort points by normalized polar angle
+                points_with_angles_alg = [(p, alg_id, polar_angle_normalized(p)) for p, alg_id in points_with_alg]
+                points_with_angles_alg.sort(key=lambda x: x[2])
+                points_sorted = [p[0] for p in points_with_angles_alg]
+                
+                # Calculate line thickness and color based on agent count (same scaling as marker size)
+                base_linewidth = 2.0
+                if max_agents > min_agents:
+                    # line_thickness = base_linewidth * (1.0 + 2.0 * (agents - min_agents) / (max_agents - min_agents))
+                    line_thickness = base_linewidth
+                    # Color interpolation from gray (0.5) to black (0.0)
+                    # color_intensity = 0.5 * (1.0 - (agents - min_agents) / (max_agents - min_agents))
+                    color_intensity = 0.5
+                    line_color = (color_intensity, color_intensity, color_intensity)
+                else:
+                    line_thickness = base_linewidth
+                    line_color = 'gray'
+
+                # # Connect consecutive points in polar angle order
+                # for i in range(len(points_sorted) - 1):
+                #     x_coords = [points_sorted[i][0], points_sorted[i+1][0]]
+                #     y_coords = [points_sorted[i][1], points_sorted[i+1][1]]
+                #     ax.plot(x_coords, y_coords, color=line_color, linestyle=':', 
+                #            linewidth=line_thickness, alpha=0.7, zorder=0)
+        
+        # Connect same method groups with lines for each agent count (if lns_line is enabled)
+        if lns_line:
+            # Define method groups
+            method_groups = [
+                ("lacam3", "lacam3_lns"),
+                ("lg_lacam", "lg_lacam_lns")
+            ]
+            
+            for base_method, lns_method in method_groups:
+                if base_method in algorithm_data and lns_method in algorithm_data:
+                    base_data = algorithm_data[base_method]
+                    lns_data = algorithm_data[lns_method]
+                    
+                    # Get the color from the base method's style
+                    base_style = ALGORITHM_STYLES.get(base_method, {"color": "black"})
+                    line_color = base_style['color']
+                    
+                    # Find common agent counts
+                    base_agents = set(base_data['agents'].values)
+                    lns_agents = set(lns_data['agents'].values)
+                    common_agents = base_agents.intersection(lns_agents)
+                    
+                    for agents in common_agents:
+                        # Get points for this agent count
+                        base_point_data = base_data[base_data['agents'] == agents]
+                        lns_point_data = lns_data[lns_data['agents'] == agents]
+                        
+                        if not base_point_data.empty and not lns_point_data.empty:
+                            base_point = (base_point_data['runtime'].iloc[0], base_point_data['flow_time_ratio'].iloc[0])
+                            lns_point = (lns_point_data['runtime'].iloc[0], lns_point_data['flow_time_ratio'].iloc[0])
+                            
+                            # Draw line connecting the two points
+                            x_coords = [base_point[0], lns_point[0]]
+                            y_coords = [base_point[1], lns_point[1]]
+                            
+                            # Use the base method's color for the connection line
+                            ax.plot(x_coords, y_coords, color=line_color, linestyle='--', 
+                                   linewidth=2, alpha=0.8, zorder=1)
         
         # Adjust layout
         plt.tight_layout()
@@ -938,7 +1097,7 @@ class IndividualMapPlotter:
         
         return fig
     
-    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False, lns_mode: bool = False, lns_sub_mode: bool = False):
+    def plot_all_individual_maps(self, save_plots: bool = True, histogram_mode: bool = False, lns_mode: bool = False, lns_sub_mode: bool = False, markers_by_agents: bool = False, lns_line: bool = False):
         """Generate individual plots for all available maps."""
         
         available_maps = self.df['map'].unique()
@@ -962,7 +1121,7 @@ class IndividualMapPlotter:
             elif lns_sub_mode:
                 fig = self.plot_lns_sub(map_file, save_plots)
             else:
-                fig = self.plot_individual_map(map_file, save_plots)
+                fig = self.plot_individual_map(map_file, save_plots, markers_by_agents, lns_line)
             if fig:
                 figures[map_file] = fig
         
@@ -1080,6 +1239,10 @@ def main():
                        help="Generate LNS sub plot (runtime vs flow_time_ratio)")
     parser.add_argument("--legend", action="store_true",
                        help="Generate legend as separate PDF file")
+    parser.add_argument("--markers-by-agents", action="store_true",
+                       help="Use different markers for agent counts instead of methods")
+    parser.add_argument("--lns-line", action="store_true",
+                       help="Connect same method groups (lacam3/lacam3_lns and lg_lacam/lg_lacam_lns) with lines for each agent count")
     
     args = parser.parse_args()
     
@@ -1111,10 +1274,10 @@ def main():
         elif args.lns_sub:
             plotter.plot_lns_sub(args.map)
         else:
-            plotter.plot_individual_map(args.map)
+            plotter.plot_individual_map(args.map, markers_by_agents=args.markers_by_agents, lns_line=args.lns_line)
     else:
         # Plot all maps
-        plotter.plot_all_individual_maps(histogram_mode=args.histogram, lns_mode=args.lns, lns_sub_mode=args.lns_sub)
+        plotter.plot_all_individual_maps(histogram_mode=args.histogram, lns_mode=args.lns, lns_sub_mode=args.lns_sub, markers_by_agents=args.markers_by_agents, lns_line=args.lns_line)
         if not args.histogram and not args.lns and not args.lns_sub:
             plotter.generate_summary_table_by_map()
     

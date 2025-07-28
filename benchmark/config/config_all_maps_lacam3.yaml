@@ -1,0 +1,71 @@
+# MAPF Benchmark Configuration - All Maps (Simplified)
+# This file configures all maps from mapf-map directory with unified scenario directory
+
+# Agent counts to test
+agent_counts: [1000]
+# agent_counts: [200]
+
+# Maps to evaluate - All maps from asset_for_benchmark/mapf-map/
+# Note: All maps use the same scenario directory specified in settings
+maps:
+  # - name: "empty-48-48"
+  #   path: "asset_for_benchmark/mapf-map/empty-48-48.map"
+  # - name: "Boston_0_256"
+  #   path: "asset_for_benchmark/mapf-map/Boston_0_256.map"
+  # - name: "Paris_1_256"
+  #   path: "asset_for_benchmark/mapf-map/Paris_1_256.map"
+  - name: "den312d"
+    path: "asset_for_benchmark/mapf-map/den312d.map"
+  # - name: "lak303d"
+  #   path: "asset_for_benchmark/mapf-map/lak303d.map"
+  # - name: "maze-128-128-10"
+  #   path: "asset_for_benchmark/mapf-map/maze-128-128-10.map"
+  # - name: "ost003d"
+  #   path: "asset_for_benchmark/mapf-map/ost003d.map"
+  # - name: "random-64-64-20"
+  #   path: "asset_for_benchmark/mapf-map/random-64-64-20.map"
+  # - name: "warehouse-10-20-10-2-2"
+  #   path: "asset_for_benchmark/mapf-map/warehouse-10-20-10-2-2.map"
+  # - name: "warehouse-20-40-10-2-1"
+  #   path: "asset_for_benchmark/mapf-map/warehouse-20-40-10-2-1.map"
+
+# Algorithms24 configuration
+algorithms:
+
+  # lg_lacam:
+  #   name: "LG-LaCAM"
+  #   executable: "../build/main"
+  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 30 --lg --lg_window 20 -o {result_file}"
+  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+  #   available: true
+
+  # lg_lacam_lns:
+  #   name: "LG-LaCAM-LNS"
+  #   executable: "../build/main"
+  #   args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 30 --lns --lg --lg_window 20 -o {result_file}"
+  #   result_file_template: "../build/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+  #   available: true
+  
+  # lacam3:
+  #   name: "LaCAM3"
+  #   executable: "third_party/lacam3/build/main"
+  #   args_template: "-i {scenario} -m {map_file} -N {agents} --no-star -v 3 -t 30 -o {result_file}"
+  #   result_file_template: "benchmark_results/lacam3/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+  #   available: true
+
+  lacam3_lns:
+    name: "LaCAM3-LNS"
+    executable: "third_party/lacam3/build/main"
+    args_template: "-i {scenario} -m {map_file} -N {agents} -v 3 -t 30 -o {result_file} --recursive-rate 0.05"
+    result_file_template: "benchmark_results/lacam3/result_{algorithm}_{map_base}_{agents}_{scenario_base}.txt"
+    available: true
+
+# Experimental settings
+settings:
+  timeout: 300  # seconds
+  num_scenarios: 30  # number of scenarios per map
+  scenario_pattern: "{map_base}-random-*.scen"  # pattern to match scenario files
+  # Base directory for assets (can be overridden by command line)
+  assets_base_dir: "../assets"
+  # Default scenario directory for all maps (used when map doesn't specify scenarios)
+  default_scenarios_dir: "asset_for_benchmark/mapf-scen-random/scen-random"

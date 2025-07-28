@@ -3,11 +3,16 @@
 
 # Basic fixed parameters
 i:
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-1.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-2.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-3.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-4.scen
-  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-5.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-32-32-random-1.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-32-32-random-2.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-32-32-random-3.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-32-32-random-4.scen
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-32-32-random-5.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-1.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-2.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-3.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-4.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/empty-48-48-random-5.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/Berlin_1_256-random-1.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/Berlin_1_256-random-1.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/Berlin_1_256-random-1.scen
@@ -23,10 +28,14 @@ i:
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-64-64-20-random-3.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-64-64-20-random-4.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-64-64-20-random-5.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-6.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-7.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-8.scen
-  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-9.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-1.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-2.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-3.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-4.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-5.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-6.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-7.scen
+  # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-10-random-8.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-10.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-11.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-12.scen
@@ -44,11 +53,16 @@ i:
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-24.scen
   # - assets/asset_for_benchmark/mapf-scen-random/scen-random/random-32-32-20-random-25.scen
 m:
-  - assets/asset_for_benchmark/mapf-map/empty-48-48.map
-  - assets/asset_for_benchmark/mapf-map/empty-48-48.map
-  - assets/asset_for_benchmark/mapf-map/empty-48-48.map
-  - assets/asset_for_benchmark/mapf-map/empty-48-48.map
-  - assets/asset_for_benchmark/mapf-map/empty-48-48.map
+  - assets/asset_for_benchmark/mapf-map/empty-32-32.map
+  - assets/asset_for_benchmark/mapf-map/empty-32-32.map
+  - assets/asset_for_benchmark/mapf-map/empty-32-32.map
+  - assets/asset_for_benchmark/mapf-map/empty-32-32.map
+  - assets/asset_for_benchmark/mapf-map/empty-32-32.map
+  # - assets/asset_for_benchmark/mapf-map/empty-48-48.map
+  # - assets/asset_for_benchmark/mapf-map/empty-48-48.map
+  # - assets/asset_for_benchmark/mapf-map/empty-48-48.map
+  # - assets/asset_for_benchmark/mapf-map/empty-48-48.map
+  # - assets/asset_for_benchmark/mapf-map/empty-48-48.map
   # - assets/asset_for_benchmark/mapf-map/Berlin_1_256.map
   # - assets/asset_for_benchmark/mapf-map/Berlin_1_256.map
   # - assets/asset_for_benchmark/mapf-map/Berlin_1_256.map
@@ -64,10 +78,14 @@ m:
   # - assets/asset_for_benchmark/mapf-map/random-64-64-20.map
   # - assets/asset_for_benchmark/mapf-map/random-64-64-20.map
   # - assets/asset_for_benchmark/mapf-map/random-64-64-20.map
-  # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
-  # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
+  # - assets/asset_for_benchmark/mapf-map/random-32-32-10.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
@@ -86,7 +104,7 @@ m:
   # - assets/asset_for_benchmark/mapf-map/random-32-32-20.map
   
 # N: [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-N: 1000
+N: 400
 v: 3
 
 baseline_without_lg:
@@ -111,8 +129,10 @@ gg: false
 # lg_window: 10
 # lg_num_refine: [1, 2, 3]
 # lg_window: [4, 8, 12, 16, 20]
-lg_window: [4, 6, 8, 10, 12, 14, 16, 18, 20]
+# lg_window: [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+lg_window: [5, 10, 15, 20, 25, 30, 35, 40]
 lg_collision_sort: [true, false]
+lg_collision_cost: 1.0
 # lns: true
 # time_limit_sec: 2
 
@@ -125,6 +145,7 @@ plot_settings:
   mode: violin
   line: lg_collision_sort
   hide_scatter: true
+  hide_data_label: true
   violin_params:
     y_axis: benchmark_normalized
     x_axis: lg_window
