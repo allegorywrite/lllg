@@ -49,7 +49,7 @@ scen
 results
 .clinerules
 *experiment_summary.csv
-assets
+assets/asset_for_benchmark
 anydocgen
 benchmark/individual_plots*
 benchmark/benchmark_results
