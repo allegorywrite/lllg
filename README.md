@@ -22,7 +22,7 @@ cmake -B build && make -C build -j4
 ## Usage
 
 ```sh
-build/main -i assets/random-32-32-10-random-1.scen -m assets/random-32-32-10.map -N 400 -v 3
+build/main -i assets/random-32-32-10-random-1.scen -m assets/random-32-32-10.map -N 400 -v 3 --lg --lg_window 8
 ```
 
 The result will be saved in `build/result.txt`.

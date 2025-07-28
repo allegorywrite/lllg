@@ -124,7 +124,6 @@ int main(int argc, char *argv[])
   LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = program.get<float>("lg_global_guide_first_order");
   LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = program.get<float>("lg_global_guide_second_order");
   LocalGuide::ENABLE_COLLISION_SORT = program.get<bool>("lg_collision_sort");
-  LocalGuide::ENABLE_OPTIMIZED_GUIDANCE = program.get<bool>("lg_optimized_guidance");
   LocalGuide::ENABLE_K_STEP_UPDATE = program.get<bool>("lg_k_step_update");
   LocalGuide::K_STEP_INTERVAL = program.get<int>("lg_k_step_interval");
   LocalGuide::ENABLE_PRUNING = program.get<bool>("lg_pruning");
@@ -132,7 +131,7 @@ int main(int argc, char *argv[])
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
-//   LocalGuide::GLOBAL_GUIDE_ON = program.get<bool>("gg");
+  // LocalGuide::GLOBAL_GUIDE_ON = program.get<bool>("gg");
   GlobalGuide::COST_MARGIN = program.get<int>("gg_margin");
 
   // pibt

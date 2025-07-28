@@ -74,7 +74,6 @@ struct LocalGuide {
   static float GLOBAL_GUIDE_FIRST_ORDER;  // Global guidance coefficient
   static float GLOBAL_GUIDE_SECOND_ORDER;  // Global guidance coefficient
   static bool ENABLE_COLLISION_SORT;      // Enable/disable collision cost sorting
-  static bool ENABLE_OPTIMIZED_GUIDANCE;   // Enable/disable optimized guidance calculation
   static bool ENABLE_K_STEP_UPDATE;       // Enable/disable k-step local guidance update
   static int K_STEP_INTERVAL;             // k-step update interval
   static bool ENABLE_PRUNING;
