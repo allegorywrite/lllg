@@ -166,7 +166,7 @@ Path sipp(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   return solution_path;
 }
 
-// WINDOWS[i]サイズのみ探索するSIPP
+// SIPP that searches only WINDOWS[i] size
 Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
                  CollisionTable *CT, const int window_size,
                  const Deadline *deadline)
@@ -187,7 +187,7 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
       std::priority_queue<SINode *, SINodes, decltype(cmpNodes)>(cmpNodes);
   std::unordered_map<SINode, SINode *, SINodeHasher> EXPLORED;
   
-  // 開始ノードの安全区間を取得
+  // Get safe intervals for start node
   auto &start_intervals = ST.get(s_i);
   if (start_intervals.empty()) return solution_path;
   
@@ -210,17 +210,17 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     }
     EXPLORED[*n] = n;
 
-    // window_sizeに到達した場合、最良のノードを記録
+    // When reaching window_size, record the best node
     if (n->t >= window_size - 1) {
       int distance_to_goal = D->get(i, n->v);
       if (distance_to_goal < best_distance) {
         best_distance = distance_to_goal;
         best_node = n;
       }
-      continue;  // これ以上展開しない
+      continue;  // Do not expand further
     }
 
-    // ゴールに到達した場合（window_size内で）
+    // When reaching the goal (within window_size)
     if (n->v == g_i) {
       best_node = n;
       break;
@@ -259,7 +259,7 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     }
   }
 
-  // 最良のノードからパスを構築
+  // Construct path from the best node
   if (best_node != nullptr) {
     // backtrack
     std::vector<Vertex*> temp_path;
@@ -270,13 +270,13 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     }
     std::reverse(temp_path.begin(), temp_path.end());
     
-    // window_sizeに合わせてパスを調整
+    // Adjust path to match window_size
     solution_path.resize(window_size);
     for (int t = 0; t < window_size; ++t) {
       if (t < static_cast<int>(temp_path.size())) {
         solution_path[t] = temp_path[t];
       } else {
-        // パスが短い場合は最後のノードで埋める
+        // If path is short, fill with the last node
         solution_path[t] = temp_path.back();
       }
     }
@@ -344,7 +344,7 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   auto OPEN = std::priority_queue<SIPPSNode *, std::vector<SIPPSNode *>, decltype(cmpNodes)>(cmpNodes);
   std::unordered_map<SIPPSNode, SIPPSNode *, SIPPSNodeHasher> EXPLORED;
   
-  // 開始ノードの安全区間を取得
+  // Get safe intervals for start node
   auto &start_intervals = ST.get(s_i);
   if (start_intervals.empty()) return solution_path;
   
@@ -374,7 +374,7 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     EXPLORED[*n] = n;
     nodes_expanded++;
 
-    // window_sizeに到達した場合、最良のノードを記録
+    // When reaching window_size, record the best node
     if (n->t >= window_size - 1) {
       int distance_to_goal = D->get(i, n->v);
       // More balanced evaluation: consider both collisions and distance, but be more lenient
@@ -394,10 +394,10 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
         best_distance = distance_to_goal;
         best_node = n;
       }
-      continue;  // これ以上展開しない
+      continue;  // Do not expand further
     }
 
-    // ゴールに到達した場合（window_size内で）
+    // When reaching the goal (within window_size)
     if (n->v == g_i) {
       if (n->c < best_collision_count || 
           (n->c == best_collision_count && n->g < best_distance)) {
@@ -472,7 +472,7 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     }
   }
 
-  // 最良のノードからパスを構築
+  // Construct path from the best node
   if (best_node != nullptr) {
     // backtrack
     std::vector<Vertex*> temp_path;
@@ -483,13 +483,13 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     }
     std::reverse(temp_path.begin(), temp_path.end());
     
-    // window_sizeに合わせてパスを調整
+    // Adjust path to match window_size
     solution_path.resize(window_size);
     for (int t = 0; t < window_size; ++t) {
       if (t < static_cast<int>(temp_path.size())) {
         solution_path[t] = temp_path[t];
       } else {
-        // パスが短い場合は最後のノードで埋める
+        // If path is short, fill with the last node
         solution_path[t] = temp_path.back();
       }
     }

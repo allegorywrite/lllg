@@ -136,13 +136,10 @@ void make_log(const Instance &ins, const Solution &solution,
     log << "\n";
   }
 
-  // ローカルガイダンスの出力
   if (LocalGuide::ON && local_guide != nullptr) {
     log << "local_guidance=\n";
-    // 履歴のサイズを出力
     log << "history_size=" << local_guide->get_history_size() << "\n";
-    
-    // 各ステップの参照軌道を出力
+
     for (int step = 0; step < local_guide->get_history_size(); ++step) {
       const auto& paths = local_guide->get_paths_at_step(step);
       log << "step" << step << ":\n";

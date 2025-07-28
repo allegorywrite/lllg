@@ -1,13 +1,13 @@
 #include "../include/local_guide.hpp"
 #include "../include/graph.hpp"  // get_x, get_y関数を使用するために追加
-#include <iostream>  // デバッグログ用
-#include <iomanip>   // デバッグログのフォーマット用
-#include <thread>    // マルチスレッド用
-#include <mutex>     // マルチスレッド用
-#include <atomic>    // アトミック操作用
-#include <chrono>    // 時間計測用
+#include <iostream>  // For debug logging
+#include <iomanip>   // For debug log formatting
+#include <thread>    // For multithreading
+#include <mutex>     // For multithreading
+#include <atomic>    // For atomic operations
+#include <chrono>    // For time measurement
 
-// 静的メンバー変数の定義
+// Definition of static member variables
 bool LocalGuide::ON = true;
 int LocalGuide::WINDOW = 10;
 int LocalGuide::NUM_REFINE = 1;
@@ -23,7 +23,7 @@ int LocalGuide::K_STEP_INTERVAL = 3;
 bool LocalGuide::ENABLE_PRUNING = false;
 float LocalGuide::PRUNING_RATE = 1.0;
 
-// 座標変換用の関数
+// Functions for coordinate transformation
 inline int get_x(int k, const Graph* G) { return k % G->width; }
 inline int get_y(int k, const Graph* G) { return k / G->width; }
 
@@ -33,8 +33,8 @@ LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
       MT(std::mt19937(seed)),
       N(ins->N),
       V_size(ins->G->size()),
-      D(_D),                    // Dを先に初期化
-      use_sipp_(_use_sipp),    // use_sipp_を後で初期化
+      D(_D),
+      use_sipp_(_use_sipp),
       CT(ins, true),
       guide_paths(N, Path(WINDOW, nullptr)),
       guide_paths_history(),
@@ -42,8 +42,8 @@ LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
       CLOSED(WINDOW, WSPPNodes(V_size, nullptr)),
       Q_to(N, nullptr),
       global_guide(gg),
-      cached_collision_costs(N, 0.0f), // 衝突コストキャッシュを0で初期化
-      step_counters(N, 0) // k-step用ステップカウンタを0で初期化
+      cached_collision_costs(N, 0.0f), // Initialize collision cost cache to 0
+      step_counters(N, 0) // Initialize step counters for k-step to 0
 {
   for (auto k = 0; k < 10000; ++k) wspp_nodes.push_back(new WSPPNode());
   clear_history();
@@ -63,10 +63,10 @@ void LocalGuide::clear_history()
 
 void LocalGuide::save_current_paths()
 {
-  // 現在の参照軌道のコピーを作成
+  // Create a copy of the current reference trajectory
   std::vector<Path> current_paths(N);
   for (int i = 0; i < N; ++i) {
-    current_paths[i] = guide_paths[i];  // Pathのコピー
+    current_paths[i] = guide_paths[i];  // Copy Path
   }
   guide_paths_history.push_back(current_paths);
   ++current_step;
@@ -85,20 +85,20 @@ int LocalGuide::get_history_size() const
   return guide_paths_history.size();
 }
 
-// k-step update 判定用のヘルパー関数
+// Helper function for k-step update determination
 bool LocalGuide::should_update_guide_path(int agent_id) {
   if (!ENABLE_K_STEP_UPDATE) {
-    return true;  // 元の実装では毎回更新
+    return true;  // In original implementation, update every time
   }
   
-  // 範囲チェック
+  // Range check
   if (agent_id < 0 || agent_id >= static_cast<int>(step_counters.size())) {
-    return true;  // 安全のため常に更新
+    return true;  // Always update for safety
   }
   
-  // 初回は必ず更新（guide_pathsが未初期化の場合）
+  // Always update on first time (when guide_paths is uninitialized)
   if (step_counters[agent_id] == 0) {
-    // guide_pathsが全てnullptrの場合は初回とみなして必ず更新
+    // If all guide_paths are nullptr, treat as first time and always update
     bool all_null = true;
     for (size_t t = 0; t < guide_paths[agent_id].size(); ++t) {
       if (guide_paths[agent_id][t] != nullptr) {
@@ -107,7 +107,7 @@ bool LocalGuide::should_update_guide_path(int agent_id) {
       }
     }
     if (all_null) {
-      // 0～K_STEP_INTERVALの間でランダムに初期化
+      // Randomly initialize between 0 and K_STEP_INTERVAL
       static thread_local std::mt19937 rng(std::random_device{}());
       std::uniform_int_distribution<int> dist(0, std::max(0, K_STEP_INTERVAL));
       step_counters[agent_id] = dist(rng);
@@ -115,10 +115,10 @@ bool LocalGuide::should_update_guide_path(int agent_id) {
     }
   }
   
-  // k-step毎に更新する
+  // Update every k-step
   step_counters[agent_id]++;
   if (step_counters[agent_id] >= K_STEP_INTERVAL) {
-    step_counters[agent_id] = 0;  // カウンタをリセット
+    step_counters[agent_id] = 0;  // Reset counter
     return true;
   }
   return false;
@@ -134,7 +134,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     return false;
   };
 
-  thread_local int wspp_node_idx = 0;  // スレッドローカル変数に変更
+  thread_local int wspp_node_idx = 0;  // Changed to thread-local variable
   auto get_node = [&](const int who, Vertex* where, WSPPNode* parent) {
 
     auto n = wspp_nodes[wspp_node_idx];
@@ -175,28 +175,25 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     wspp_node_idx += 1;
     return n;
   };
-  thread_local std::vector<std::pair<int, int> > CLOSED_idx;  // スレッドローカル変数に変更
+  thread_local std::vector<std::pair<int, int> > CLOSED_idx;  // Changed to thread-local variable
 
   auto update_guide_path = [&](const int i) {
     // if (use_sipp_) {
-    //   // SIPPを使用してパスを計算（ウィンドウサイズ制限付き）
     //   if (USE_SOFT_SIPP) {
     //     guide_paths[i] = sipps_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
     //   } else {
     //     guide_paths[i] = sipp_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
     //   }
 
-    //   // パスの処理
     //   if (guide_paths[i].empty()) {
     //     if (Q_from[i] == ins->goals[i]) {
     //       guide_paths[i] = Path(WINDOWS[i], ins->goals[i]);
-    //       cached_collision_costs[i] = 0.0f; // ゴールにいる場合は衝突コスト0
+    //       cached_collision_costs[i] = 0.0f; 
     //     } else {
     //       guide_paths[i] = Path(WINDOWS[i], Q_from[i]);
-    //       cached_collision_costs[i] = 0.0f; // パスが生成できない場合は衝突コスト0
+    //       cached_collision_costs[i] = 0.0f; 
     //     }
     //   } else {
-    //     // SIPPで生成されたパスの衝突コストを計算（並列処理では簡略化）
     //     {
     //       float total_collision_cost = 0;
     //       for (int t = 0; t < WINDOWS[i] - 1; ++t) {
@@ -216,7 +213,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     // special case
     if (Q_from[i] == ins->goals[i]) {
       for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
-      cached_collision_costs[i] = 0.0f; // ゴールにいる場合は衝突コスト0
+      cached_collision_costs[i] = 0.0f; // Collision cost is 0 when at goal
       return;
     }
 
@@ -254,7 +251,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
           }
           temp_n = temp_n->parent;
         }
-        // 残りの時間ステップもgoalで埋める（goalに到達した場合）
+        // Fill remaining time steps with goal (when goal is reached)
         if (n->where == ins->goals[i]) {
           for (int t = n->when + 1; t < WINDOW; ++t) {
             guide_paths[i][t] = ins->goals[i];
@@ -306,7 +303,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     }
   }
 
-  // 参照軌道の改善
+  // Reference trajectory improvement
   int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;
   for (auto k = 0; k < refine_iterations; ++k) {
     
@@ -338,7 +335,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         CT.enrollPath(i, guide_paths[i]);
       }
     } else {
-      // 元の実装：エージェントオーダーに従って処理
+      // Original implementation: process according to agent order
       for (auto _i = 0; _i < N; ++_i) {
         const auto i = order[_i];
         Q_to[i] = nullptr;

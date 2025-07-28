@@ -20,7 +20,7 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
   // vertex collision
   if (t_to < body[v_to->id].size()) {
     for (auto agent : body[v_to->id][t_to]) {
-      if (agent != exclude_agent) {  // 除外エージェントをスキップ
+      if (agent != exclude_agent) {
         collision++;
       }
     }
@@ -30,7 +30,7 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
   if (t_to < body[v_from->id].size() && t_from < body[v_to->id].size()) {
     for (auto j : body[v_from->id][t_to]) {
       for (auto k : body[v_to->id][t_from]) {
-        if (j == k && j != exclude_agent) {  // 除外エージェントをスキップ
+        if (j == k && j != exclude_agent) {
           ++collision;
         }
       }
@@ -40,7 +40,6 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
   // goal collision
   for (auto last_timestep : body_last[v_to->id]) {
     if (t_to > last_timestep) {
-      // ここではゴール衝突の除外エージェント確認は複雑なので、簡略化
       ++collision;
     }
   }
@@ -50,19 +49,10 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
 
 void CollisionTable::enrollPath(const int i, Path &path)
 {
-  // std::cout << "DEBUG: enrollPath開始 - エージェント " << i << std::endl;
-  // std::cout << "DEBUG: path size = " << path.size() << std::endl;
-  
   if (path.empty()) return;
   const auto T_i = path.size() - 1;
   for (auto t = 0; t <= T_i; ++t) {
     auto v = path[t];
-    // std::cout << "DEBUG: t=" << t << ", v=" << (v ? std::to_string(v->id) : "nullptr") << std::endl;
-
-    if (v == nullptr) {
-      // std::cout << "DEBUG: エラー: nullptrの頂点が検出されました" << std::endl;
-      continue;
-    }
 
     // update collision count
     if (t > 0 && !no_use_collision_cnt) {
@@ -72,13 +62,9 @@ void CollisionTable::enrollPath(const int i, Path &path)
     // register
     while (body[v->id].size() <= t) body[v->id].emplace_back();
     body[v->id][t].push_back(i);
-    // std::cout << "DEBUG: 頂点 " << v->id << " のタイムステップ " << t << " にエージェント " << i << " を登録" << std::endl;
   }
 
   // goal
-  if (path.back() == nullptr) {
-    // std::cout << "DEBUG: エラー: ゴール頂点がnullptrです" << std::endl;
-  }
   body_last[path.back()->id].push_back(T_i);
   if (!no_use_collision_cnt) {
     auto &&entry = body[path.back()->id];
@@ -91,11 +77,9 @@ void CollisionTable::enrollPath(const int i, Path &path)
 void CollisionTable::clearPath(const int i, Path &path)
 {
   if (path.empty()) {
-    // std::cout << "DEBUG: pathが空です" << std::endl;
     return;
   }
   if (path[0] == nullptr) {
-    // std::cout << "DEBUG: path[0]がnullptrです" << std::endl;
     return;
   }
   
@@ -103,20 +87,6 @@ void CollisionTable::clearPath(const int i, Path &path)
 
   for (auto t = 0; t <= T_i; ++t) {
     auto v = path[t];
-    if (v == nullptr) {
-      // std::cout << "DEBUG: エラー: nullptrの頂点が検出されました" << std::endl;
-      continue;
-    }
-    
-    if (v->id >= body.size()) {
-      // std::cout << "DEBUG: エラー: v->id(" << v->id << ") >= body.size(" << body.size() << ")" << std::endl;
-      continue;
-    }
-    
-    if (t >= body[v->id].size()) {
-      // std::cout << "DEBUG: エラー: t(" << t << ") >= body[v->id].size(" << body[v->id].size() << ")" << std::endl;
-      continue;
-    }
     
     auto &&entry = body[v->id][t];
     // remove entry
@@ -134,20 +104,9 @@ void CollisionTable::clearPath(const int i, Path &path)
       collision_cnt -= getCollisionCost(path[t - 1], path[t], t - 1);
     }
   }
-
+  
   // goal
-  if (path.back() == nullptr) {
-    // std::cout << "DEBUG: エラー: ゴール頂点がnullptrです" << std::endl;
-    return;
-  }
-  
-  if (path.back()->id >= body_last.size()) {
-    // std::cout << "DEBUG: エラー: path.back()->id(" << path.back()->id << ") >= body_last.size(" << body_last.size() << ")" << std::endl;
-    return;
-  }
-  
   auto &&entry_body_last = body_last[path.back()->id];
-
   for (auto itr = entry_body_last.begin(); itr != entry_body_last.end();) {
     if (*itr == T_i) {
       entry_body_last.erase(itr);

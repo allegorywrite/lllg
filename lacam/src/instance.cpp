@@ -26,7 +26,6 @@ Instance::Instance(const std::string &map_filename,
       N(start_indexes.size()),
       delete_graph_after_used(true)
 {
-  // 各頂点のaccessed_by_agentsを初期化
   for (auto& v : G->V) {
     v->accessed_by_agents.resize(N, false);
   }
@@ -47,7 +46,6 @@ Instance::Instance(const std::string &scen_filename,
       N(_N),
       delete_graph_after_used(true)
 {
-  // 各頂点のaccessed_by_agentsを初期化
   for (auto& v : G->V) {
     v->accessed_by_agents.resize(N, false);
   }
@@ -91,7 +89,6 @@ Instance::Instance(const std::string &map_filename, const int _N,
       N(_N),
       delete_graph_after_used(true)
 {
-  // 各頂点のaccessed_by_agentsを初期化
   for (auto& v : G->V) {
     v->accessed_by_agents.resize(N, false);
   }

@@ -182,7 +182,6 @@ Solution LaCAM::solve()
     auto H = H_goal;
     while (H != nullptr) {
       solution.push_back(H->Q);
-      // LocalGuideの参照軌道も保存
       if (!H->local_guide_paths.empty()) {
         solution_local_guide_paths.push_back(H->local_guide_paths);
       }
@@ -191,7 +190,6 @@ Solution LaCAM::solve()
     std::reverse(solution.begin(), solution.end());
     std::reverse(solution_local_guide_paths.begin(), solution_local_guide_paths.end());
     
-    // LocalGuideの履歴を再構成
     if (!solution_local_guide_paths.empty()) {
       local_guide.reconstruct_solution_paths(solution_local_guide_paths);
       solver_info(2, "reconstructed LocalGuide solution paths with ", solution_local_guide_paths.size(), " steps");
@@ -209,8 +207,7 @@ Solution LaCAM::solve()
 bool LaCAM::set_new_config(HNode *H, LNode *L, Config &Q_to)
 {
   local_guide.construct(H->Q, H->order);
-  
-  // LocalGuideの現在の参照軌道をHNodeに保存
+
   H->local_guide_paths = local_guide.get_current_guide_paths();
 
   for (auto d = 0; d < L->depth; ++d) Q_to[L->who[d]] = L->where[d];

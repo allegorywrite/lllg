@@ -4,7 +4,7 @@
 #pragma once
 #include "dist_table.hpp"
 #include "instance.hpp"
-#include "local_guide.hpp"  // LocalGuideクラスを使用するために追加
+#include "local_guide.hpp" 
 #include "metrics.hpp"
 #include "utils.hpp"
 

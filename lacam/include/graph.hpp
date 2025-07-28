@@ -11,8 +11,8 @@ struct Vertex {
   const int y;
   std::vector<Vertex *> neighbor;
   std::vector<Vertex *> actions;  // neighbor + self
-  int access_count;  // 各エージェントのアクセスカウント
-  std::vector<bool> accessed_by_agents;  // 各エージェントのアクセス状態
+  int access_count;
+  std::vector<bool> accessed_by_agents;
 
   Vertex(int _id, int _index, int _x, int _y);
 };

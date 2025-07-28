@@ -31,11 +31,11 @@ using WSPPNodes = std::vector<WSPPNode*>;
 
 using LocalHeuristic = int;
 
-// ウィンドウサイズの更新判定タイプを定義
+// Define window size update determination types
 enum class WindowUpdateType {
-  ACCESS_COUNT,  // アクセス回数ベース
-  OCCUPANCY,     // 占有率ベース
-  COLLISION      // 衝突量ベース
+  ACCESS_COUNT,  // Access count based
+  OCCUPANCY,     // Occupancy rate based
+  COLLISION      // Collision amount based
 };
 
 struct LocalGuide {
@@ -51,14 +51,14 @@ struct LocalGuide {
   CollisionTable CT;
   std::vector<Path> guide_paths;
   
-  // // 並列計算用のヘルパー関数
+  // // Helper functions for parallel computation
   // Path computeGuidePath(int agent_id, const Config& Q_from);
   // Path computeGuidePathCorrect(int agent_id, const Config& Q_from);
   // Path computeGuidePathWithCT(int agent_id, const Config& Q_from, CollisionTable& ct);
 
-  // 参照軌道の履歴を保存
-  std::vector<std::vector<Path>> guide_paths_history;  // 各ステップでの参照軌道の履歴
-  int current_step;  // 現在のステップ数
+  // Save reference trajectory history
+  std::vector<std::vector<Path>> guide_paths_history;  // History of reference trajectories at each step
+  int current_step;  // Current step count
 
   WSPPNodes wspp_nodes;
   std::vector<WSPPNodes> CLOSED;
@@ -68,15 +68,15 @@ struct LocalGuide {
   static bool ON;
   static int WINDOW;
   static int NUM_REFINE;
-  static float COLLISION_COST;  // 衝突コスト
-  static float COLLISION_COST_ORDER;  // 衝突コストの係数
+  static float COLLISION_COST;  // Collision cost
+  static float COLLISION_COST_ORDER;  // Collision cost coefficient
   // static bool GLOBAL_GUIDE_ON;
-  static float GLOBAL_GUIDE_FIRST_ORDER;  // グローバルガイダンスの係数
-  static float GLOBAL_GUIDE_SECOND_ORDER;  // グローバルガイダンスの係数
-  static bool ENABLE_COLLISION_SORT;      // 衝突コストソートの有効/無効
-  static bool ENABLE_OPTIMIZED_GUIDANCE;   // 最適化されたガイダンス計算の有効/無効
-  static bool ENABLE_K_STEP_UPDATE;       // k-step local guidance update の有効/無効
-  static int K_STEP_INTERVAL;             // k-step update の間隔
+  static float GLOBAL_GUIDE_FIRST_ORDER;  // Global guidance coefficient
+  static float GLOBAL_GUIDE_SECOND_ORDER;  // Global guidance coefficient
+  static bool ENABLE_COLLISION_SORT;      // Enable/disable collision cost sorting
+  static bool ENABLE_OPTIMIZED_GUIDANCE;   // Enable/disable optimized guidance calculation
+  static bool ENABLE_K_STEP_UPDATE;       // Enable/disable k-step local guidance update
+  static int K_STEP_INTERVAL;             // k-step update interval
   static bool ENABLE_PRUNING;
   static float PRUNING_RATE;
 
@@ -84,8 +84,8 @@ struct LocalGuide {
   GlobalGuide* global_guide;
   bool use_sipp_; // Flag to use SIPP
 
-  std::vector<float> cached_collision_costs;  // A*探索時の衝突コストをキャッシュ
-  std::vector<int> step_counters;          // k-step update用の各エージェントのステップカウンタ
+  std::vector<float> cached_collision_costs;  // Cache collision costs during A* search
+  std::vector<int> step_counters;          // Step counters for each agent for k-step update
 
   LocalGuide(const Instance* _ins, DistTable* _D, int seed = 0,
              GlobalGuide* _global_guide = nullptr, bool _use_sipp = false);
@@ -94,17 +94,17 @@ struct LocalGuide {
   void construct(const Config& Q_from, const std::vector<int>& order);
   LocalHeuristic get(const int i, Vertex* v);
 
-  // 履歴関連のメソッド
-  void clear_history();  // 履歴をクリア
-  void save_current_paths();  // 現在の参照軌道を履歴に保存
-  const std::vector<Path>& get_paths_at_step(int step) const;  // 特定のステップの参照軌道を取得
-  int get_history_size() const;  // 履歴のサイズを取得
+  // History-related methods
+  void clear_history();  // Clear history
+  void save_current_paths();  // Save current reference trajectory to history
+  const std::vector<Path>& get_paths_at_step(int step) const;  // Get reference trajectory at specific step
+  int get_history_size() const;  // Get history size
 
-  // HNodeとの連携メソッド
-  void set_guide_paths(const std::vector<Path>& paths);  // HNodeから参照軌道を設定
-  std::vector<Path> get_current_guide_paths() const;     // 現在の参照軌道を取得
-  void reconstruct_solution_paths(const std::vector<std::vector<Path>>& solution_paths);  // ソリューションに対応する参照軌道を再構成
+  // Methods for cooperation with HNode
+  void set_guide_paths(const std::vector<Path>& paths);  // Set reference trajectory from HNode
+  std::vector<Path> get_current_guide_paths() const;     // Get current reference trajectory
+  void reconstruct_solution_paths(const std::vector<std::vector<Path>>& solution_paths);  // Reconstruct reference trajectory corresponding to solution
 
-  // k-step update 判定用のヘルパー関数
+  // Helper function for k-step update determination
   bool should_update_guide_path(int agent_id);
 };

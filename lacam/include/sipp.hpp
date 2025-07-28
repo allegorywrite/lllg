@@ -52,12 +52,10 @@ Path sipp(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
           CollisionTable *CT, const Deadline *deadline = nullptr,
           const int f_upper_bound = INT_MAX);
 
-// WINDOWS[i]サイズのみ探索するSIPP
 Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
                  CollisionTable *CT, const int window_size,
                  const Deadline *deadline = nullptr);
 
-// SIPPS: SIPP with soft constraints (based on AAAI22 paper)
 Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
                   CollisionTable *CT, const int window_size,
                   const Deadline *deadline = nullptr);
