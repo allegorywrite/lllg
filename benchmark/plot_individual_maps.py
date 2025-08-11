@@ -604,8 +604,8 @@ class IndividualMapPlotter:
                                     color=style['color'], alpha=0.1, linewidth=0)
 
             # Formatting
-            # ax.set_xlabel('Runtime (sec)', fontweight='bold', fontsize=22)
-            # ax.set_ylabel('Flow Time / LB', fontweight='bold', fontsize=22)
+            ax.set_xlabel('Runtime (sec)', fontweight='bold', fontsize=22)
+            ax.set_ylabel('Flow Time / LB', fontweight='bold', fontsize=22)
             # ax.set_title(f'{map_name} Map - {agents} Agents', fontweight='bold', fontsize=24, y=1.05)
             ax.grid(True)
             # Set x-axis lower limit to 0
@@ -912,28 +912,28 @@ class IndividualMapPlotter:
                    color=style['color'], linewidth=style.get('linewidth', 3),
                    label=style.get('label', alg_name), zorder=1)
             
-            # # Add agent count labels only for LaCAM
-            # if alg_id == 'lacam':
-            #     for _, row in grouped.iterrows():
-            #         agents = int(row["agents"])
-            #         if agents == 1000:
-            #             label_text = 'agents: 1000'
-            #         else:
-            #             label_text = str(agents)
+            # Add agent count labels only for LaCAM
+            if alg_id == 'lacam':
+                for _, row in grouped.iterrows():
+                    agents = int(row["agents"])
+                    if agents == 1000:
+                        label_text = 'agents: 1000'
+                    else:
+                        label_text = str(agents)
                     
-            #         # Add comp_time_init if available
-            #         if 'comp_time_init' in grouped.columns and pd.notna(row.get('comp_time_init')):
-            #             comp_time_init = row['comp_time_init']
-            #             label_text += f' (init: {comp_time_init:.1f})'
+                    # Add comp_time_init if available
+                    if 'comp_time_init' in grouped.columns and pd.notna(row.get('comp_time_init')):
+                        comp_time_init = row['comp_time_init']
+                        label_text += f' (init: {comp_time_init:.1f})'
                     
-            #         ax.annotate(label_text, 
-            #                   (row['runtime'], row['flow_time_ratio']),
-            #                   xytext=(20, -10), textcoords='offset points',
-            #                   fontsize=32, ha='left', va='bottom', zorder=3)
+                    ax.annotate(label_text, 
+                              (row['runtime'], row['flow_time_ratio']),
+                              xytext=(20, -10), textcoords='offset points',
+                              fontsize=32, ha='left', va='bottom', zorder=3)
         
         # Formatting
-        # ax.set_xlabel('runtime (sec)', fontweight='bold', fontsize=22)
-        # ax.set_ylabel('flow time / LB', fontweight='bold', fontsize=22)
+        ax.set_xlabel('runtime (sec)', fontweight='bold', fontsize=22)
+        ax.set_ylabel('flow time / LB', fontweight='bold', fontsize=22)
         # ax.set_title(f'{map_name} Map', fontweight='bold', fontsize=24, y=1.05)
         
         # Ensure all spines are visible with proper thickness

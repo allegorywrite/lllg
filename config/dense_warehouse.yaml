@@ -1,0 +1,74 @@
+# LG-LACAM random-10-10 experiment configuration
+# This configuration defines parameter combinations for random-10-10 map experiments
+
+# Basic fixed parameters
+i:
+  - assets/dense_warehouse-random-1.scen
+  - assets/dense_warehouse-random-2.scen
+  - assets/dense_warehouse-random-3.scen
+  - assets/dense_warehouse-random-4.scen
+  - assets/dense_warehouse-random-5.scen
+  - assets/dense_warehouse-random-6.scen
+  - assets/dense_warehouse-random-7.scen
+  - assets/dense_warehouse-random-9.scen
+  - assets/dense_warehouse-random-10.scen
+  - assets/dense_warehouse-random-11.scen
+  - assets/dense_warehouse-random-12.scen
+  - assets/dense_warehouse-random-13.scen
+  - assets/dense_warehouse-random-14.scen
+  - assets/dense_warehouse-random-15.scen
+  - assets/dense_warehouse-random-16.scen
+  - assets/dense_warehouse-random-17.scen
+  - assets/dense_warehouse-random-18.scen
+  - assets/dense_warehouse-random-19.scen
+  - assets/dense_warehouse-random-20.scen
+
+m:
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+  - assets/dense_warehouse.map
+
+N: 128
+v: 3
+
+baseline_without_lg:
+  lg: false
+  gg: false
+baseline_with_gg:
+  lg: false
+  gg: true
+
+"&window_collision_collab": 
+  properties:
+    - lg_window
+    - lg_collision_sort
+
+# LG parameters
+lg: true
+gg: true
+lg_window: [4, 6, 8, 10, 12, 14, 16, 18, 20]
+lg_collision_sort: [true, false]
+
+# Plot settings
+plot_settings:
+  mode: violin
+  violin_params:
+    y_axis: soc_normalized
+    orient: vertical

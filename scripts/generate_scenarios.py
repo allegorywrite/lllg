@@ -79,14 +79,14 @@ def generate_scenario(map_name, width, height, valid_positions, num_agents, seed
         
         distance = calculate_distance(start, goal)
         
-        scenario_lines.append(f"{i}\t{map_name}\t{width}\t{height}\t{start[0]}\t{start[1]}\t{goal[0]}\t{goal[1]}\t{distance:.8f}")
+        scenario_lines.append(f"{i}\t{map_name}.map\t{width}\t{height}\t{start[0]}\t{start[1]}\t{goal[0]}\t{goal[1]}\t{distance:.8f}")
     
     return scenario_lines
 
 def main():
-    map_file = "assets/random-10-10.map"
-    map_name = "random-10-10.map"
-    scenario_dir = "assets/random-10-10.map-scen-random/scen-random"
+    map_file = "assets/dense_warehouse.map"
+    map_name = "dense_warehouse"
+    scenario_dir = "assets"
     
     # Read map
     grid, width, height = read_map_file(map_file)
@@ -97,11 +97,11 @@ def main():
     
     # Generate scenarios 1-20 with maximum possible agents
     # Each agent needs unique start and unique goal, but starts can overlap with other agents' goals
-    max_agents = min(70, len(valid_positions))
+    max_agents = min(128, len(valid_positions))
     print(f"Maximum agents possible: {max_agents}")
     
     for scenario_num in range(1, 21):
-        scenario_file = f"{scenario_dir}/random-10-10-random-{scenario_num}.scen"
+        scenario_file = f"{scenario_dir}/{map_name}-random-{scenario_num}.scen"
         
         try:
             # Generate scenario with unique seed for each
