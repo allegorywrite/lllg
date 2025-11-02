@@ -62,3 +62,5 @@ random-32-32-20/
 .claude
 venv
 __pycache__
+
+third_party/
