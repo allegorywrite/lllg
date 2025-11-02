@@ -1,6 +1,9 @@
 #include <argparse/argparse.hpp>
 #include <planner.hpp>
 #include <post_processing.hpp>
+#include <lifelong_runner.hpp>
+#include <chrono>
+#include <random>
 
 int main(int argc, char *argv[])
 {
@@ -24,6 +27,20 @@ int main(int argc, char *argv[])
       .help("time limit sec")
       .scan<'g', float>()
       .default_value(3.0f);
+  // Horizon control for LaCAM
+  program.add_argument("--lacam_horizon")
+      .help("limit LaCAM high-level depth (solution steps); -1 for unlimited")
+      .scan<'d', int>()
+      .default_value(-1);
+  // Lifelong control
+  program.add_argument("-S", "--steps")
+      .help("number of execution steps (lifelong mode)")
+      .scan<'d', int>()
+      .default_value(-1);
+  program.add_argument("--lifelong")
+      .help("enable Lifelong LaCAM (replan each step and execute one step)")
+      .default_value(false)
+      .implicit_value(true);
   program.add_argument("-o", "--output")
       .help("output file")
       .default_value("./build/result.txt");
@@ -42,7 +59,7 @@ int main(int argc, char *argv[])
   program.add_argument("--lg_collision_cost")
       .help("collision cost for dynamic window adjustment")
       .scan<'g', float>()
-      .default_value(3.0f);
+      .default_value(2.0f);
   program.add_argument("--lg_collision_cost_order")
       .help("collision cost order for dynamic window adjustment")
       .scan<'g', float>()
@@ -136,6 +153,8 @@ int main(int argc, char *argv[])
 
   // pibt
   PIBT::SWAP = !program.get<bool>("no_pibt_swap");
+  // LaCAM horizon
+  LaCAM::STEP_LIMIT = program.get<int>("lacam_horizon");
 
   // lns, plns
   LNS::ON = program.get<bool>("lns");
@@ -143,35 +162,44 @@ int main(int argc, char *argv[])
 
   // solve
   const auto use_sipp = program.get<bool>("use_sipp");
-  const auto deadline = Deadline(time_limit_sec * 1000);
-  auto result = solve_with_timing(ins, verbose - 1, &deadline, seed, use_sipp);
-  auto solution = result.solution;
-  auto solution_init = result.solution_init;
-  auto lacam = result.lacam;
-  const auto comp_time_ms = deadline.elapsed_ms();
-  const auto comp_time_init_ms = result.comp_time_init_ms;
+  const auto lifelong = program.get<bool>("lifelong");
+  const auto steps_limit = program.get<int>("steps");
 
-  // failure
-  if (solution.empty()) {
-    info(1, verbose, &deadline, "failed to solve");
+  if (!lifelong) {
+    const auto deadline = Deadline(time_limit_sec * 1000);
+    auto result = solve_with_timing(ins, verbose - 1, &deadline, seed, use_sipp);
+    auto solution = result.solution;
+    auto solution_init = result.solution_init;
+    auto lacam = result.lacam;
+    const auto comp_time_ms = deadline.elapsed_ms();
+    const auto comp_time_init_ms = result.comp_time_init_ms;
+
+    // failure
+    if (solution.empty()) {
+      info(1, verbose, &deadline, "failed to solve");
+      delete lacam;
+      return 1;
+    }
+
+    // check feasibility
+    if (!is_feasible_solution(ins, solution, verbose)) {
+      info(0, verbose, &deadline, "invalid solution");
+      delete lacam;
+      return 1;
+    }
+
+    // post processing
+    print_stats(verbose, &deadline, ins, solution, comp_time_ms);
+    // Only pass comp_time_init_ms if LNS was used
+    const auto comp_time_init_to_log = LNS::ON ? comp_time_init_ms : -1.0;
+    const auto empty_solution = Solution();
+    const auto& solution_init_to_log = LNS::ON ? solution_init : empty_solution;
+    make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide, comp_time_init_to_log, solution_init_to_log);
     delete lacam;
-    return 1;
+    return 0;
   }
 
-  // check feasibility
-  if (!is_feasible_solution(ins, solution, verbose)) {
-    info(0, verbose, &deadline, "invalid solution");
-    delete lacam;
-    return 1;
-  }
-
-  // post processing
-  print_stats(verbose, &deadline, ins, solution, comp_time_ms);
-  // Only pass comp_time_init_ms if LNS was used
-  const auto comp_time_init_to_log = LNS::ON ? comp_time_init_ms : -1.0;
-  const auto empty_solution = Solution();
-  const auto& solution_init_to_log = LNS::ON ? solution_init : empty_solution;
-  make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide, comp_time_init_to_log, solution_init_to_log);
-  delete lacam;
-  return 0;
+  // Lifelong LaCAM mode (outer loop: replan each step)
+  return run_lifelong(ins, verbose, time_limit_sec, seed, use_sipp, steps_limit,
+                      output_name, map_name, log_short);
 }

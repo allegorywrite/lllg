@@ -22,7 +22,7 @@ cmake -B build && make -C build -j4
 ## Usage
 
 ```sh
-build/main -i assets/random-32-32-10-random-1.scen -m assets/random-32-32-10.map -N 400 -v 3 --lg --lg_window 8
+build/main -i assets/random-32-32-10-random-1.scen -m assets/random-32-32-10.map -N 400 -v 2 --lg --lg_window 8 --lifelong -S 10
 ```
 
 The result will be saved in `build/result.txt`.
@@ -39,7 +39,7 @@ This repository is compatible with [kei18@mapf-visualizer](https://github.com/ke
 For example,
 
 ```sh
-mapf-visualizer assets/random-32-32-10.map build/result.txt
+mapf-visualizer assets/random-32-32-10.map build/result.txt --lifelong
 ```
 
 ## Notes

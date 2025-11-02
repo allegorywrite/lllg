@@ -14,8 +14,10 @@ DistTable::DistTable(const Instance *ins)
 
 void DistTable::setup(const Instance *ins)
 {
-  auto bfs = [&](const int i) {
-    auto g_i = ins->goals[i];
+  // Capture pointer by value to avoid dangling references, and wait for all tasks
+  const Instance* local = ins;
+  auto bfs = [this, local](const int i) {
+    auto g_i = local->goals[i];
     auto Q = std::queue<Vertex *>({g_i});
     table[i][g_i->id] = 0;
     while (!Q.empty()) {
@@ -32,9 +34,12 @@ void DistTable::setup(const Instance *ins)
   };
 
   auto pool = std::vector<std::future<void>>();
-  for (size_t i = 0; i < ins->N; ++i) {
-    pool.emplace_back(std::async(std::launch::async, bfs, i));
+  pool.reserve(local->N);
+  for (size_t i = 0; i < local->N; ++i) {
+    pool.emplace_back(std::async(std::launch::async, bfs, static_cast<int>(i)));
   }
+  // Ensure all BFS computations complete before returning
+  for (auto &f : pool) f.get();
 }
 
 int DistTable::get(const int i, const int v_id) { return table[i][v_id]; }

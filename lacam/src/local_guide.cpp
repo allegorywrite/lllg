@@ -127,6 +127,17 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
   if (!ON || NUM_REFINE < 0) return;
 
+  // Minimal debug to catch early crashes on first call
+  try {
+    if (N > 0 && Q_from.size() == static_cast<size_t>(N)) {
+      // Validate a couple of pointers
+      (void)Q_from[0];
+      (void)ins->goals[0];
+    }
+  } catch (...) {
+    std::cerr << "LocalGuide construct: invalid Q_from or goals pointers" << std::endl;
+  }
+
   auto cmp = [&](WSPPNode* a, WSPPNode* b) {
     if (a->f != b->f) return a->f > b->f;
     if (a->g != b->g) return a->g < b->g;
@@ -135,7 +146,15 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
   thread_local int wspp_node_idx = 0;  // Changed to thread-local variable
   auto get_node = [&](const int who, Vertex* where, WSPPNode* parent) {
-
+    // Safeguard: dynamically expand node pool if needed to avoid OOB
+    if (wspp_node_idx >= static_cast<int>(wspp_nodes.size())) {
+      wspp_nodes.push_back(new WSPPNode());
+      // Minimal debug hint; low frequency
+      if (wspp_node_idx % 10000 == 0) {
+        std::cerr << "LocalGuide DEBUG: expand wspp_nodes to "
+                  << wspp_nodes.size() << std::endl;
+      }
+    }
     auto n = wspp_nodes[wspp_node_idx];
     n->when = (parent == nullptr) ? 0 : parent->when + 1;
     n->where = where;

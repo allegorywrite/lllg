@@ -9,6 +9,7 @@
 #include "plns.hpp"
 #include "post_processing.hpp"
 #include "utils.hpp"
+#include <functional>
 
 struct SolveResult {
   Solution solution;
@@ -21,7 +22,8 @@ std::pair<Solution, LaCAM*> solve(const Instance &ins, const int verbose = 0,
                const Deadline *deadline = nullptr, int seed = 0, bool use_sipp = false);
 
 SolveResult solve_with_timing(const Instance &ins, const int verbose = 0,
-               const Deadline *deadline = nullptr, int seed = 0, bool use_sipp = false);
+               const Deadline *deadline = nullptr, int seed = 0, bool use_sipp = false,
+               std::function<void(LaCAM&)> init = nullptr);
 
 Solution solve_lacam2(const Instance &ins, const int verbose,
                       const Deadline *deadline, int seed, DistTable *D);

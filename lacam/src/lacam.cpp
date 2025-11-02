@@ -1,6 +1,7 @@
 #include "../include/lacam.hpp"
 
 bool LaCAM::ANYTIME = false;
+int LaCAM::STEP_LIMIT = -1;
 
 HNode::HNode(Config _Q, DistTable *D, HNode *_parent)
     : Q(_Q),
@@ -80,7 +81,9 @@ LaCAM::~LaCAM() {}
 
 Solution LaCAM::solve()
 {
-  solver_info(1, "LaCAM begins");
+  solver_info(2, "LaCAM begins");
+  reached_horizon = false;
+  last_partial_solution.clear();
 
   // construct global guidance
   global_guide.construct();
@@ -139,6 +142,8 @@ Solution LaCAM::solve()
 
     // create successors at the high-level search
     auto Q_to = Config(ins->N, nullptr);
+    // Helpful debug at verbose>=2 to locate crash point
+    solver_info(2, "about to call set_new_config, L->depth=", L->depth);
     auto res = set_new_config(H, L, Q_to);
 
     // low level search
@@ -156,7 +161,18 @@ Solution LaCAM::solve()
     if (iter != EXPLORED.end()) {
       // known configuration
       auto H_known = iter->second;
+      // depth limit check before creating successor (solution size = depth+1)
+      if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+        reached_horizon = true;
+        break; // stop search at horizon
+      }
       auto H_new = new HNode(Q_to, D, H);
+      // limit depth by STEP_LIMIT (solution size = depth+1)
+      if (STEP_LIMIT >= 0 && H_new->depth > STEP_LIMIT) {
+        reached_horizon = true;
+        delete H_new;
+        break; // stop search at horizon
+      }
       if (H_known->g < H_new->g) {
         OPEN.push_front(H_known);
         delete H_new;
@@ -168,7 +184,17 @@ Solution LaCAM::solve()
       }
     } else {
       // new one -> insert
+      // depth limit check before creating successor
+      if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+        reached_horizon = true;
+        break; // stop search at horizon
+      }
       auto H_new = new HNode(Q_to, D, H);
+      if (STEP_LIMIT >= 0 && H_new->depth > STEP_LIMIT) {
+        reached_horizon = true;
+        delete H_new;
+        break; // stop search at horizon
+      }
       OPEN.push_front(H_new);
       EXPLORED[H_new->Q] = H_new;
       GC_HNodes.push_back(H_new);
@@ -180,20 +206,33 @@ Solution LaCAM::solve()
   std::vector<std::vector<Path>> solution_local_guide_paths;  // ソリューションに対応するLocalGuideの履歴
   {
     auto H = H_goal;
+    if (H == nullptr && !GC_HNodes.empty()) {
+      // fallback: use deepest explored node as partial solution source
+      int max_depth = -1;
+      HNode* best_node = nullptr;
+      for (auto node : GC_HNodes) {
+        if (node->depth > max_depth) { max_depth = node->depth; best_node = node; }
+      }
+      H = best_node;
+    }
+    Solution rev;
     while (H != nullptr) {
-      solution.push_back(H->Q);
+      rev.push_back(H->Q);
       if (!H->local_guide_paths.empty()) {
         solution_local_guide_paths.push_back(H->local_guide_paths);
       }
       H = H->parent;
     }
-    std::reverse(solution.begin(), solution.end());
+    std::reverse(rev.begin(), rev.end());
+    solution = rev;
     std::reverse(solution_local_guide_paths.begin(), solution_local_guide_paths.end());
     
     if (!solution_local_guide_paths.empty()) {
       local_guide.reconstruct_solution_paths(solution_local_guide_paths);
       solver_info(2, "reconstructed LocalGuide solution paths with ", solution_local_guide_paths.size(), " steps");
     }
+    // store partial (or full) for external use when solve() returns empty (no goal found)
+    last_partial_solution = solution;
   }
 
   if (solution.empty() && OPEN.empty()) solver_info(2, "unsolvable instance");
@@ -206,10 +245,15 @@ Solution LaCAM::solve()
 
 bool LaCAM::set_new_config(HNode *H, LNode *L, Config &Q_to)
 {
+  // Debug: entering LocalGuide construction
+  solver_info(3, "enter set_new_config: H->depth=", H->depth,
+              " L->depth=", L->depth);
   local_guide.construct(H->Q, H->order);
 
   H->local_guide_paths = local_guide.get_current_guide_paths();
 
   for (auto d = 0; d < L->depth; ++d) Q_to[L->who[d]] = L->where[d];
-  return pibt.set_new_config(H->Q, Q_to, H->order);
+  auto ok = pibt.set_new_config(H->Q, Q_to, H->order);
+  solver_info(3, "leave set_new_config: ok=", ok);
+  return ok;
 }

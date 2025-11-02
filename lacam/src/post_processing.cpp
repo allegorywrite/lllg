@@ -55,7 +55,7 @@ bool is_feasible_solution(const Instance &ins, const Solution &solution,
 
 void print_stats(const int verbose, const Deadline *deadline,
                  const Instance &ins, const Solution &solution,
-                 const double comp_time_ms)
+                 const double comp_time_ms, const char* state_label)
 {
   auto ceil = [](float x) { return std::ceil(x * 100) / 100; };
   auto dist_table = DistTable(ins);
@@ -63,14 +63,14 @@ void print_stats(const int verbose, const Deadline *deadline,
   const auto makespan_lb = get_makespan_lower_bound(ins, dist_table);
   const auto sum_of_costs = get_sum_of_costs(solution);
   const auto sum_of_costs_lb = get_sum_of_costs_lower_bound(ins, dist_table);
-  const auto sum_of_loss = get_sum_of_loss(solution);
-  info(1, verbose, deadline, "solved", "\tcomp_time_ms: ", comp_time_ms,
-       "\tmakespan: ", makespan, " (lb=", makespan_lb,
-       ", ub=", ceil((float)makespan / makespan_lb), ")",
-       "\tsum_of_costs: ", sum_of_costs, " (lb=", sum_of_costs_lb,
-       ", ub=", ceil((float)sum_of_costs / sum_of_costs_lb), ")",
-       "\tsum_of_loss: ", sum_of_loss, " (lb=", sum_of_costs_lb,
-       ", ub=", ceil((float)sum_of_loss / sum_of_costs_lb), ")");
+  const bool solved = !solution.empty() && is_same_config(solution.back(), ins.goals);
+  const char* label = state_label != nullptr ? state_label : (solved ? "solved" : "failed");
+  info(1, verbose, deadline,
+       label,
+       "\tmakespan: ", makespan,
+       " (lb=", makespan_lb, ", ub=", ceil((float)makespan / makespan_lb), ")",
+       "\tsum_of_costs: ", sum_of_costs,
+       " (lb=", sum_of_costs_lb, ", ub=", ceil((float)sum_of_costs / sum_of_costs_lb), ")");
 }
 
 // for log of map_name
@@ -80,7 +80,11 @@ void make_log(const Instance &ins, const Solution &solution,
               const std::string &output_name, const double comp_time_ms,
               const std::string &map_name, const int seed,
               const bool log_short, const LocalGuide* local_guide,
-              const double comp_time_init_ms, const Solution& solution_init)
+              const double comp_time_init_ms, const Solution& solution_init,
+              const std::vector<Config>* lifelong_goals_history,
+              const int goal_change_count,
+              const std::vector<std::vector<Path>>* local_guidance_history,
+              const bool* override_solved)
 {
   // map name
   std::smatch results;
@@ -99,7 +103,8 @@ void make_log(const Instance &ins, const Solution &solution,
   log << "agents=" << ins.N << "\n";
   log << "map_file=" << map_recorded_name << "\n";
   log << "solver=planner\n";
-  log << "solved=" << !solution.empty() << "\n";
+  bool solved_flag = override_solved ? *override_solved : !solution.empty();
+  log << "solved=" << solved_flag << "\n";
   log << "soc=" << get_sum_of_costs(solution) << "\n";
   log << "soc_lb=" << get_sum_of_costs_lower_bound(ins, dist_table) << "\n";
   log << "makespan=" << get_makespan(solution) << "\n";
@@ -115,6 +120,19 @@ void make_log(const Instance &ins, const Solution &solution,
     log << "soc_init=" << get_sum_of_costs(solution_init) << "\n";
   }
   log << "seed=" << seed << "\n";
+  // Realtime-compatible metric from lifelong goals history, if available
+  if (lifelong_goals_history != nullptr && !lifelong_goals_history->empty()) {
+    long long total_completed_tasks_modified = 0;
+    for (size_t t = 1; t < lifelong_goals_history->size(); ++t) {
+      const auto& prev_goals = (*lifelong_goals_history)[t - 1];
+      const auto& curr_goals = (*lifelong_goals_history)[t];
+      const size_t n = std::min(prev_goals.size(), curr_goals.size());
+      for (size_t i = 0; i < n; ++i) {
+        if (curr_goals[i] != prev_goals[i]) ++total_completed_tasks_modified;
+      }
+    }
+    log << "total_completed_tasks=" << total_completed_tasks_modified << "\n";
+  }
   if (log_short) return;
   log << "starts=";
   for (size_t i = 0; i < ins.N; ++i) {
@@ -122,9 +140,23 @@ void make_log(const Instance &ins, const Solution &solution,
     log << "(" << get_x(k) << "," << get_y(k) << "),";
   }
   log << "\ngoals=";
-  for (size_t i = 0; i < ins.N; ++i) {
-    auto k = ins.goals[i]->index;
-    log << "(" << get_x(k) << "," << get_y(k) << "),";
+  // Lifelong mode: output goals history per timestep if provided
+  if (lifelong_goals_history != nullptr && !lifelong_goals_history->empty()) {
+    log << "\n";
+    for (size_t t = 0; t < lifelong_goals_history->size(); ++t) {
+      log << t << ":";
+      const auto& goals_at_t = (*lifelong_goals_history)[t];
+      for (const auto& goal : goals_at_t) {
+        auto k = goal->index;
+        log << "(" << get_x(k) << "," << get_y(k) << "),";
+      }
+      log << "\n";
+    }
+  } else {
+    for (size_t i = 0; i < ins.N; ++i) {
+      auto k = ins.goals[i]->index;
+      log << "(" << get_x(k) << "," << get_y(k) << "),";
+    }
   }
   log << "\nsolution=\n";
   for (size_t t = 0; t < solution.size(); ++t) {
@@ -136,22 +168,39 @@ void make_log(const Instance &ins, const Solution &solution,
     log << "\n";
   }
 
-  if (LocalGuide::ON && local_guide != nullptr) {
+  if (LocalGuide::ON && (local_guide != nullptr || local_guidance_history != nullptr)) {
     log << "local_guidance=\n";
-    log << "history_size=" << local_guide->get_history_size() << "\n";
-
-    for (int step = 0; step < local_guide->get_history_size(); ++step) {
-      const auto& paths = local_guide->get_paths_at_step(step);
-      log << "step" << step << ":\n";
-      for (size_t i = 0; i < ins.N; ++i) {
-        log << "agent" << i << ":";
-        for (size_t t = 0; t < paths[i].size(); ++t) {
-          if (paths[i][t] != nullptr) {
-            log << "(" << get_x(paths[i][t]->index) << "," 
-                << get_y(paths[i][t]->index) << "),";
+    if (local_guidance_history != nullptr) {
+      log << "history_size=" << local_guidance_history->size() << "\n";
+      for (size_t step = 0; step < local_guidance_history->size(); ++step) {
+        const auto& paths = (*local_guidance_history)[step];
+        log << "step" << step << ":\n";
+        for (size_t i = 0; i < ins.N; ++i) {
+          log << "agent" << i << ":";
+          for (size_t t = 0; t < paths[i].size(); ++t) {
+            if (paths[i][t] != nullptr) {
+              log << "(" << get_x(paths[i][t]->index) << ","
+                  << get_y(paths[i][t]->index) << "),";
+            }
           }
+          log << "\n";
         }
-        log << "\n";
+      }
+    } else if (local_guide != nullptr) {
+      log << "history_size=" << local_guide->get_history_size() << "\n";
+      for (int step = 0; step < local_guide->get_history_size(); ++step) {
+        const auto& paths = local_guide->get_paths_at_step(step);
+        log << "step" << step << ":\n";
+        for (size_t i = 0; i < ins.N; ++i) {
+          log << "agent" << i << ":";
+          for (size_t t = 0; t < paths[i].size(); ++t) {
+            if (paths[i][t] != nullptr) {
+              log << "(" << get_x(paths[i][t]->index) << ","
+                  << get_y(paths[i][t]->index) << "),";
+            }
+          }
+          log << "\n";
+        }
       }
     }
   }

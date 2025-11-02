@@ -87,7 +87,9 @@ void CollisionTable::clearPath(const int i, Path &path)
 
   for (auto t = 0; t <= T_i; ++t) {
     auto v = path[t];
-    
+    // If this time slice was never enrolled, skip safely
+    if (v == nullptr) continue;
+    if (t >= (int)body[v->id].size()) continue;
     auto &&entry = body[v->id][t];
     // remove entry
     for (auto itr = entry.begin(); itr != entry.end();) {
@@ -106,20 +108,24 @@ void CollisionTable::clearPath(const int i, Path &path)
   }
   
   // goal
-  auto &&entry_body_last = body_last[path.back()->id];
-  for (auto itr = entry_body_last.begin(); itr != entry_body_last.end();) {
-    if (*itr == T_i) {
-      entry_body_last.erase(itr);
-      break;
-    } else {
-      ++itr;
+  if (path.back() != nullptr) {
+    auto &&entry_body_last = body_last[path.back()->id];
+    for (auto itr = entry_body_last.begin(); itr != entry_body_last.end();) {
+      if (*itr == T_i) {
+        entry_body_last.erase(itr);
+        break;
+      } else {
+        ++itr;
+      }
     }
   }
   
   if (!no_use_collision_cnt) {
-    auto &&entry_body = body[path.back()->id];
-    for (auto t = T_i + 1; t < entry_body.size(); ++t) {
-      collision_cnt -= entry_body[t].size();
+    if (path.back() != nullptr) {
+      auto &&entry_body = body[path.back()->id];
+      for (auto t = T_i + 1; t < (int)entry_body.size(); ++t) {
+        collision_cnt -= entry_body[t].size();
+      }
     }
   }
 }

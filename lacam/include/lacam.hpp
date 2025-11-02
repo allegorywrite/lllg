@@ -68,16 +68,23 @@ struct LaCAM {
   GlobalGuide global_guide;
   LocalGuide local_guide;
   int loop_cnt;
+  // store last partial solution (backtracked from deepest explored HNode when no goal found)
+  Solution last_partial_solution;
+  // whether STEP_LIMIT (horizon) was reached during the last solve
+  bool reached_horizon;
 
   // Hyperparameters
   static bool ANYTIME;
+  // Maximum allowed high-level depth (solution length). -1 for unlimited.
+  static int STEP_LIMIT;
 
   LaCAM(const Instance *_ins, DistTable *_D, int _verbose = 0,
         const Deadline *_deadline = nullptr, int _seed = 0, bool _use_sipp = false);
   ~LaCAM();
   Solution solve();
   bool set_new_config(HNode *S, LNode *M, Config &Q_to);
-
+  const Solution& get_last_partial_solution() const { return last_partial_solution; }
+  bool was_horizon_reached() const { return reached_horizon; }
   // utilities
   template <typename... Body>
   void solver_info(const int level, Body &&...body)
