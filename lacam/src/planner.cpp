@@ -2,14 +2,14 @@
 #include <chrono>
 
 std::pair<Solution, LaCAM*> solve(const Instance &ins, int verbose, const Deadline *deadline,
-               int seed, bool use_sipp)
+               int seed)
 {
-  auto result = solve_with_timing(ins, verbose, deadline, seed, use_sipp, nullptr);
+  auto result = solve_with_timing(ins, verbose, deadline, seed, nullptr);
   return {result.solution, result.lacam};
 }
 
 SolveResult solve_with_timing(const Instance &ins, int verbose, const Deadline *deadline,
-               int seed, bool use_sipp, std::function<void(LaCAM&)> init)
+               int seed, std::function<void(LaCAM&)> init)
 {
   // Measure initial solution computation time
   auto init_start = std::chrono::high_resolution_clock::now();
@@ -19,7 +19,7 @@ SolveResult solve_with_timing(const Instance &ins, int verbose, const Deadline *
   info(3, verbose, "set distance table");
 
   // lacam
-  auto lacam = new LaCAM(&ins, &D, verbose, deadline, seed, use_sipp);
+  auto lacam = new LaCAM(&ins, &D, verbose, deadline, seed);
   info(3, verbose, "start lacam");
   if (init) {
     init(*lacam);

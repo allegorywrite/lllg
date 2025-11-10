@@ -79,7 +79,7 @@ struct LaCAM {
   static int STEP_LIMIT;
 
   LaCAM(const Instance *_ins, DistTable *_D, int _verbose = 0,
-        const Deadline *_deadline = nullptr, int _seed = 0, bool _use_sipp = false);
+        const Deadline *_deadline = nullptr, int _seed = 0);
   ~LaCAM();
   Solution solve();
   bool set_new_config(HNode *S, LNode *M, Config &Q_to);

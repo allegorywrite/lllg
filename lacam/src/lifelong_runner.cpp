@@ -12,11 +12,11 @@ int run_lifelong(const Instance& base_ins,
                  int verbose,
                  float time_limit_sec,
                  int seed,
-                 bool use_sipp,
                  int steps_limit,
                  const std::string& output_name,
                  const std::string& map_name,
-                 bool log_short)
+                 bool log_short,
+                 LifelongSeedMode seed_mode)
 {
   // Prepare state
   auto G = base_ins.G;
@@ -53,6 +53,8 @@ int run_lifelong(const Instance& base_ins,
   int steps_done = 0;
   double total_comp_time_ms = 0.0;
   Solution prev_plan;  // previous cycle's full plan (for seeding guide)
+  std::vector<Path> prev_local_guide_paths;  // previous cycle's LocalGuide step-0 paths
+  bool prev_local_guide_paths_valid = false;
 
   while (max_steps < 0 || steps_done < max_steps) {
     // Update goals for agents that have reached their goals
@@ -71,20 +73,28 @@ int run_lifelong(const Instance& base_ins,
     auto cyc_deadline = Deadline(time_limit_sec * 1000);
     std::function<void(LaCAM&)> init_cb = nullptr;
     std::vector<Path> seed_paths; // keep alive until init_cb executes
-    if (!prev_plan.empty() && LocalGuide::WINDOW > 0) {
-      seed_paths.assign(cyc_ins.N, Path(LocalGuide::WINDOW, nullptr));
-      for (int i = 0; i < (int)cyc_ins.N; ++i) {
-        seed_paths[i][0] = current_config[i];
-        for (int t = 1; t < LocalGuide::WINDOW; ++t) {
-          if (t + 1 < (int)prev_plan.size()) seed_paths[i][t] = prev_plan[t + 1][i];
-          else seed_paths[i][t] = current_goals[i];
+    const bool can_seed = LocalGuide::ON && LocalGuide::WINDOW > 0 && seed_mode != LifelongSeedMode::None;
+    if (can_seed) {
+      if (seed_mode == LifelongSeedMode::PrevPlan && !prev_plan.empty()) {
+        seed_paths.assign(cyc_ins.N, Path(LocalGuide::WINDOW, nullptr));
+        for (int i = 0; i < (int)cyc_ins.N; ++i) {
+          seed_paths[i][0] = current_config[i];
+          for (int t = 1; t < LocalGuide::WINDOW; ++t) {
+            if (t + 1 < (int)prev_plan.size()) seed_paths[i][t] = prev_plan[t + 1][i];
+            else seed_paths[i][t] = current_goals[i];
+          }
         }
+        init_cb = [&seed_paths](LaCAM& lacam_ref) {
+          lacam_ref.local_guide.set_guide_paths(seed_paths);
+        };
+      } else if (seed_mode == LifelongSeedMode::PrevLocalGuide && prev_local_guide_paths_valid) {
+        seed_paths = prev_local_guide_paths;
+        init_cb = [&seed_paths](LaCAM& lacam_ref) {
+          lacam_ref.local_guide.set_guide_paths(seed_paths);
+        };
       }
-      init_cb = [&seed_paths](LaCAM& lacam_ref) {
-        lacam_ref.local_guide.set_guide_paths(seed_paths);
-      };
     }
-    auto result = solve_with_timing(cyc_ins, verbose - 1, &cyc_deadline, seed, use_sipp, init_cb);
+    auto result = solve_with_timing(cyc_ins, verbose - 1, &cyc_deadline, seed, init_cb);
     auto sol = result.solution;
     auto lacam = result.lacam;
     auto cyc_end = std::chrono::high_resolution_clock::now();
@@ -130,14 +140,22 @@ int run_lifelong(const Instance& base_ins,
     }
 
     // Record local guidance for this executed step (use step-0 guidance of this cycle)
+    bool updated_prev_local_guide = false;
     if (LocalGuide::ON && lacam != nullptr) {
       try {
         if (lacam->local_guide.get_history_size() > 0) {
-          local_guidance_history.push_back(lacam->local_guide.get_paths_at_step(0));
+          const auto& step0_paths = lacam->local_guide.get_paths_at_step(0);
+          local_guidance_history.push_back(step0_paths);
+          prev_local_guide_paths = step0_paths;
+          prev_local_guide_paths_valid = true;
+          updated_prev_local_guide = true;
         }
       } catch (...) {
         // ignore logging errors
       }
+    }
+    if (!updated_prev_local_guide) {
+      prev_local_guide_paths_valid = false;
     }
 
     // Record goals and state at this timestep
@@ -155,7 +173,7 @@ int run_lifelong(const Instance& base_ins,
   }
 
   // Logging (skip feasibility since goals changed over time)
-  print_stats(verbose, nullptr, base_ins, executed_solution, total_comp_time_ms);
+  // print_stats(verbose, nullptr, base_ins, executed_solution, total_comp_time_ms);
   make_log(base_ins, executed_solution, output_name, total_comp_time_ms, map_name, seed,
            log_short, nullptr, -1.0, {}, &goals_history, 0, &local_guidance_history);
 
@@ -174,7 +192,7 @@ int run_lifelong(const Instance& base_ins,
   }
   const double comp_time_s = total_comp_time_ms > 0.0 ? (total_comp_time_ms / 1000.0) : 0.0;
   const int ms = get_makespan(executed_solution);
-  const double throughput_tasks = comp_time_s > 0.0 ? (total_completed_tasks / comp_time_s) : 0.0;
+  const double throughput_tasks = comp_time_s > 0.0 ? (static_cast<double>(total_completed_tasks) / static_cast<double>(ms)) : 0.0;
   const double throughput_makespan = comp_time_s > 0.0 ? (ms / comp_time_s) : 0.0;
   info(1, verbose,
        "Lifelong summary:\t",

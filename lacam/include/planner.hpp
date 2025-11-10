@@ -19,10 +19,10 @@ struct SolveResult {
 };;
 
 std::pair<Solution, LaCAM*> solve(const Instance &ins, const int verbose = 0,
-               const Deadline *deadline = nullptr, int seed = 0, bool use_sipp = false);
+               const Deadline *deadline = nullptr, int seed = 0);
 
 SolveResult solve_with_timing(const Instance &ins, const int verbose = 0,
-               const Deadline *deadline = nullptr, int seed = 0, bool use_sipp = false,
+               const Deadline *deadline = nullptr, int seed = 0,
                std::function<void(LaCAM&)> init = nullptr);
 
 Solution solve_lacam2(const Instance &ins, const int verbose,
