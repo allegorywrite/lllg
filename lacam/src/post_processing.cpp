@@ -65,7 +65,7 @@ void print_stats(const int verbose, const Deadline *deadline,
   const auto sum_of_costs_lb = get_sum_of_costs_lower_bound(ins, dist_table);
   const bool solved = !solution.empty() && is_same_config(solution.back(), ins.goals);
   const char* label = state_label != nullptr ? state_label : (solved ? "solved" : "failed");
-  info(1, verbose, deadline,
+  info(2, verbose, deadline,
        label,
        "\tmakespan: ", makespan,
        " (lb=", makespan_lb, ", ub=", ceil((float)makespan / makespan_lb), ")",

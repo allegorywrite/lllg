@@ -63,7 +63,7 @@ LNode::LNode(LNode *parent, int i, Vertex *v)
 LNode::~LNode(){};
 
 LaCAM::LaCAM(const Instance *_ins, DistTable *_D, int _verbose,
-             const Deadline *_deadline, int _seed, bool _use_sipp)
+             const Deadline *_deadline, int _seed)
     : ins(_ins),
       D(_D),
       deadline(_deadline),
@@ -72,7 +72,7 @@ LaCAM::LaCAM(const Instance *_ins, DistTable *_D, int _verbose,
       verbose(_verbose),
       pibt(ins, D, seed),
       global_guide(ins, D, deadline, seed),
-      local_guide(ins, D, seed, &global_guide, _use_sipp),
+      local_guide(ins, D, seed, &global_guide),
       loop_cnt(0)
 {
 }

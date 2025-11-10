@@ -70,24 +70,13 @@ struct LocalGuide {
   static int NUM_REFINE;
   static float COLLISION_COST;  // Collision cost
   static float COLLISION_COST_ORDER;  // Collision cost coefficient
-  // static bool GLOBAL_GUIDE_ON;
-  static float GLOBAL_GUIDE_FIRST_ORDER;  // Global guidance coefficient
-  static float GLOBAL_GUIDE_SECOND_ORDER;  // Global guidance coefficient
-  static bool ENABLE_COLLISION_SORT;      // Enable/disable collision cost sorting
-  static bool ENABLE_K_STEP_UPDATE;       // Enable/disable k-step local guidance update
-  static int K_STEP_INTERVAL;             // k-step update interval
-  static bool ENABLE_PRUNING;
-  static float PRUNING_RATE;
-
   // guidance
   GlobalGuide* global_guide;
-  bool use_sipp_; // Flag to use SIPP
-
   std::vector<float> cached_collision_costs;  // Cache collision costs during A* search
   std::vector<int> step_counters;          // Step counters for each agent for k-step update
 
   LocalGuide(const Instance* _ins, DistTable* _D, int seed = 0,
-             GlobalGuide* _global_guide = nullptr, bool _use_sipp = false);
+             GlobalGuide* _global_guide = nullptr);
   ~LocalGuide();
 
   void construct(const Config& Q_from, const std::vector<int>& order);

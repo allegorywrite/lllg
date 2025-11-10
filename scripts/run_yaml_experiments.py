@@ -374,7 +374,6 @@ def get_axis_label(param_name):
         'soc_normalized': 'Normalized SoC (SoC/SoC_LB)',
         'runtime': 'Runtime (ms)',
         'comp_time_ms': 'Computation Time (ms)',
-        'use_sipp': 'Use SIPP',
         'lg': 'Local Guidance',
         'gg': 'Global Guidance',
         'lg_window': 'LG Window Size',

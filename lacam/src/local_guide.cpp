@@ -13,27 +13,18 @@ int LocalGuide::WINDOW = 10;
 int LocalGuide::NUM_REFINE = 1;
 float LocalGuide::COLLISION_COST = 1.0f;
 float LocalGuide::COLLISION_COST_ORDER = 1e-7;
-// bool LocalGuide::GLOBAL_GUIDE_ON = false;
-float LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = 1e-5;
-float LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = 1e-9;
-bool LocalGuide::ENABLE_COLLISION_SORT = false;
-bool LocalGuide::ENABLE_K_STEP_UPDATE = false;
-int LocalGuide::K_STEP_INTERVAL = 3;
-bool LocalGuide::ENABLE_PRUNING = false;
-float LocalGuide::PRUNING_RATE = 1.0;
 
 // Functions for coordinate transformation
 inline int get_x(int k, const Graph* G) { return k % G->width; }
 inline int get_y(int k, const Graph* G) { return k / G->width; }
 
 LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
-                       GlobalGuide* gg, bool _use_sipp)
+                       GlobalGuide* gg)
     : ins(_ins),
       MT(std::mt19937(seed)),
       N(ins->N),
       V_size(ins->G->size()),
       D(_D),
-      use_sipp_(_use_sipp),
       CT(ins, true),
       guide_paths(N, Path(WINDOW, nullptr)),
       guide_paths_history(),
@@ -84,45 +75,6 @@ int LocalGuide::get_history_size() const
   return guide_paths_history.size();
 }
 
-// Helper function for k-step update determination
-bool LocalGuide::should_update_guide_path(int agent_id) {
-  if (!ENABLE_K_STEP_UPDATE) {
-    return true;  // In original implementation, update every time
-  }
-  
-  // Range check
-  if (agent_id < 0 || agent_id >= static_cast<int>(step_counters.size())) {
-    return true;  // Always update for safety
-  }
-  
-  // Always update on first time (when guide_paths is uninitialized)
-  if (step_counters[agent_id] == 0) {
-    // If all guide_paths are nullptr, treat as first time and always update
-    bool all_null = true;
-    for (size_t t = 0; t < guide_paths[agent_id].size(); ++t) {
-      if (guide_paths[agent_id][t] != nullptr) {
-        all_null = false;
-        break;
-      }
-    }
-    if (all_null) {
-      // Randomly initialize between 0 and K_STEP_INTERVAL
-      static thread_local std::mt19937 rng(std::random_device{}());
-      std::uniform_int_distribution<int> dist(0, std::max(0, K_STEP_INTERVAL));
-      step_counters[agent_id] = dist(rng);
-      return true;
-    }
-  }
-  
-  // Update every k-step
-  step_counters[agent_id]++;
-  if (step_counters[agent_id] >= K_STEP_INTERVAL) {
-    step_counters[agent_id] = 0;  // Reset counter
-    return true;
-  }
-  return false;
-}
-
 void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
   if (!ON || NUM_REFINE < 0) return;
@@ -170,8 +122,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
     n->h = D->get(who, where);
 
-    auto&& gg_h = global_guide->get(who, where);
-    n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    // auto&& gg_h = global_guide->get(who, where);
+    // n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
 
     n->f = n->g + n->h;
     wspp_node_idx += 1;
@@ -180,38 +132,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   thread_local std::vector<std::pair<int, int> > CLOSED_idx;  // Changed to thread-local variable
 
   auto update_guide_path = [&](const int i) {
-    // if (use_sipp_) {
-    //   if (USE_SOFT_SIPP) {
-    //     guide_paths[i] = sipps_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
-    //   } else {
-    //     guide_paths[i] = sipp_window(i, Q_from[i], ins->goals[i], D, &CT, WINDOWS[i], nullptr);
-    //   }
-
-    //   if (guide_paths[i].empty()) {
-    //     if (Q_from[i] == ins->goals[i]) {
-    //       guide_paths[i] = Path(WINDOWS[i], ins->goals[i]);
-    //       cached_collision_costs[i] = 0.0f; 
-    //     } else {
-    //       guide_paths[i] = Path(WINDOWS[i], Q_from[i]);
-    //       cached_collision_costs[i] = 0.0f; 
-    //     }
-    //   } else {
-    //     {
-    //       float total_collision_cost = 0;
-    //       for (int t = 0; t < WINDOWS[i] - 1; ++t) {
-    //         if (guide_paths[i][t] != nullptr && guide_paths[i][t+1] != nullptr) {
-    //           auto collision = CT.getCollisionCost(guide_paths[i][t], guide_paths[i][t+1], t);
-    //           if (collision >= 1) {
-    //             total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
-    //           }
-    //         }
-    //       }
-    //       cached_collision_costs[i] = total_collision_cost;
-    //     }
-    //   }
-    // } else {
-
-    // Use space-time A* (original implementation)
+    // Use space-time A*
     // special case
     if (Q_from[i] == ins->goals[i]) {
       for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
@@ -267,14 +188,6 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       for (auto&& v : C) {
         const auto t = n->when + 1;
         if (CLOSED[t][v->id] != nullptr) continue;
-
-        if(ENABLE_PRUNING){
-          const int dist_to_goal = D->get(i, v);
-          const int dist_from_start = D->get(i, Q_from[i]);
-          if (dist_from_start > 0 && (n->when + 1 + dist_to_goal) - dist_from_start > WINDOW * PRUNING_RATE) {
-            continue;
-          }
-        }
         
         auto n_new = get_node(i, v, n);
         OPEN.push(n_new);
@@ -308,48 +221,12 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   // Reference trajectory improvement
   int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;
   for (auto k = 0; k < refine_iterations; ++k) {
-    
-    if (ENABLE_COLLISION_SORT) {
-      // Serial collision cost sorting (original implementation)
-      std::vector<std::pair<float, int>> collision_costs;
-      for (auto _i = 0; _i < N; ++_i) {
-        const auto i = order[_i];
-        collision_costs.push_back({cached_collision_costs[i], i});
-      }
-      
-      // Sort by collision cost (high to low)
-      std::sort(collision_costs.begin(), collision_costs.end(), 
-                [](const std::pair<float, int>& a, const std::pair<float, int>& b) {
-                  return a.first > b.first;
-                });
-      
-      // Process agents serially in collision cost order
-      for (const auto& cost_agent : collision_costs) {
-        const auto i = cost_agent.second;
-        Q_to[i] = nullptr;
-        CT.clearPath(i, guide_paths[i]);
-        
-        // k-step optimization: only update guide path if needed
-        if (should_update_guide_path(i)) {
-          update_guide_path(i);
-        } 
-        
-        CT.enrollPath(i, guide_paths[i]);
-      }
-    } else {
-      // Original implementation: process according to agent order
-      for (auto _i = 0; _i < N; ++_i) {
-        const auto i = order[_i];
-        Q_to[i] = nullptr;
-        CT.clearPath(i, guide_paths[i]);
-        
-        // k-step optimization: only update guide path if needed
-        if (should_update_guide_path(i)) {
-          update_guide_path(i);
-        } 
-        
-        CT.enrollPath(i, guide_paths[i]);
-      }
+    for (auto _i = 0; _i < N; ++_i) {
+      const auto i = order[_i];
+      Q_to[i] = nullptr;
+      CT.clearPath(i, guide_paths[i]);
+      update_guide_path(i);
+      CT.enrollPath(i, guide_paths[i]);
     }
   }
   

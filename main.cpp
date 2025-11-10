@@ -47,6 +47,9 @@ int main(int argc, char *argv[])
   program.add_argument("-l", "--log_short")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--lifelong_seed_mode")
+      .help("initialization source for Lifelong LaCAM local guide: plan, local_guide, none")
+      .default_value(std::string("local_guide"));
 
   // solver parameters
   program.add_argument("--no_pibt_swap")
@@ -64,48 +67,12 @@ int main(int argc, char *argv[])
       .help("collision cost order for dynamic window adjustment")
       .scan<'g', float>()
       .default_value(1e-7f);
-  program.add_argument("--lg_global_guide_first_order")
-      .help("global guide first order for dynamic window adjustment")
-      .scan<'g', float>()
-      .default_value(1e-5f);
-  program.add_argument("--lg_global_guide_second_order")
-      .help("global guide second order for dynamic window adjustment")
-      .scan<'g', float>()
-      .default_value(1e-9f);
-  program.add_argument("--lg_collision_sort")
-      .help("enable collision cost sorting for agent processing (high collision cost agents first)")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_optimized_guidance")
-      .help("enable optimized global guidance calculation")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_k_step_update")
-      .help("enable k-step local guidance update (update guide every k steps instead of every step)")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_pruning")
-      .help("enable pruning in local guide (prune unnecessary search branches)")
-      .default_value(false)
-      .implicit_value(true);
-  program.add_argument("--lg_pruning_rate")
-      .help("pruning rate for local guide (prune search branches if estimated cost exceeds this rate)")
-      .scan<'g', float>()
-      .default_value(1.0f);
-  program.add_argument("--lg_k_step_interval")
-      .help("k-step update interval (number of steps between guide updates)")
-      .scan<'d', int>()
-      .default_value(3);
 
   program.add_argument("--gg_margin").scan<'d', int>().default_value(10);
   program.add_argument("--gg").default_value(false).implicit_value(true);
 
   program.add_argument("--lns").default_value(false).implicit_value(true);
   program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
-  program.add_argument("--use_sipp")
-      .help("use SIPP for local guide")
-      .default_value(false)
-      .implicit_value(true);
 
   try {
     program.parse_args(argc, argv);
@@ -124,6 +91,18 @@ int main(int argc, char *argv[])
   const auto output_name = program.get<std::string>("output");
   const auto log_short = program.get<bool>("log_short");
   const auto N = program.get<int>("num");
+  const auto seed_mode_str = program.get<std::string>("lifelong_seed_mode");
+  LifelongSeedMode lifelong_seed_mode = LifelongSeedMode::PrevLocalGuide;
+  if (seed_mode_str == "plan") {
+    lifelong_seed_mode = LifelongSeedMode::PrevPlan;
+  } else if (seed_mode_str == "local_guide") {
+    lifelong_seed_mode = LifelongSeedMode::PrevLocalGuide;
+  } else if (seed_mode_str == "none") {
+    lifelong_seed_mode = LifelongSeedMode::None;
+  } else {
+    std::cerr << "Unknown --lifelong_seed_mode '" << seed_mode_str
+              << "'. Falling back to 'plan'." << std::endl;
+  }
   const auto ins = scen_name.size() > 0 ? Instance(scen_name, map_name, N)
                                         : Instance(map_name, N, seed);
   if (!ins.is_valid(1)) return 1;
@@ -138,18 +117,6 @@ int main(int argc, char *argv[])
 
   LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
   LocalGuide::COLLISION_COST_ORDER = program.get<float>("lg_collision_cost_order");
-  LocalGuide::GLOBAL_GUIDE_FIRST_ORDER = program.get<float>("lg_global_guide_first_order");
-  LocalGuide::GLOBAL_GUIDE_SECOND_ORDER = program.get<float>("lg_global_guide_second_order");
-  LocalGuide::ENABLE_COLLISION_SORT = program.get<bool>("lg_collision_sort");
-  LocalGuide::ENABLE_K_STEP_UPDATE = program.get<bool>("lg_k_step_update");
-  LocalGuide::K_STEP_INTERVAL = program.get<int>("lg_k_step_interval");
-  LocalGuide::ENABLE_PRUNING = program.get<bool>("lg_pruning");
-  LocalGuide::PRUNING_RATE = program.get<float>("lg_pruning_rate");
-
-  // global guide
-  GlobalGuide::ON = program.get<bool>("gg");
-  // LocalGuide::GLOBAL_GUIDE_ON = program.get<bool>("gg");
-  GlobalGuide::COST_MARGIN = program.get<int>("gg_margin");
 
   // pibt
   PIBT::SWAP = !program.get<bool>("no_pibt_swap");
@@ -161,13 +128,13 @@ int main(int argc, char *argv[])
   PLNS::NUM_REFINERS = program.get<int>("plns_num_refiners");
 
   // solve
-  const auto use_sipp = program.get<bool>("use_sipp");
+//   const auto use_sipp = program.get<bool>("use_sipp");
   const auto lifelong = program.get<bool>("lifelong");
   const auto steps_limit = program.get<int>("steps");
 
   if (!lifelong) {
     const auto deadline = Deadline(time_limit_sec * 1000);
-    auto result = solve_with_timing(ins, verbose - 1, &deadline, seed, use_sipp);
+    auto result = solve_with_timing(ins, verbose - 1, &deadline, seed);
     auto solution = result.solution;
     auto solution_init = result.solution_init;
     auto lacam = result.lacam;
@@ -200,6 +167,6 @@ int main(int argc, char *argv[])
   }
 
   // Lifelong LaCAM mode (outer loop: replan each step)
-  return run_lifelong(ins, verbose, time_limit_sec, seed, use_sipp, steps_limit,
-                      output_name, map_name, log_short);
+  return run_lifelong(ins, verbose, time_limit_sec, seed, steps_limit,
+                      output_name, map_name, log_short, lifelong_seed_mode);
 }
