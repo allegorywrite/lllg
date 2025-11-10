@@ -1,6 +1,6 @@
 #include "../include/global_guide.hpp"
 
-bool GlobalGuide::ON = true;
+bool GlobalGuide::ON = false;
 int GlobalGuide::COST_MARGIN = 2;
 
 GlobalGuide::GlobalGuide(const Instance *_ins, DistTable *_D,

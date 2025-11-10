@@ -118,6 +118,10 @@ int main(int argc, char *argv[])
   LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
   LocalGuide::COLLISION_COST_ORDER = program.get<float>("lg_collision_cost_order");
 
+  // global guide
+  GlobalGuide::ON = program.get<bool>("gg");
+  GlobalGuide::COST_MARGIN = program.get<int>("gg_margin");
+
   // pibt
   PIBT::SWAP = !program.get<bool>("no_pibt_swap");
   // LaCAM horizon
