@@ -20,4 +20,5 @@ struct DistTable {
   DistTable(const Instance *ins);
 
   void setup(const Instance *ins);  // initialization
+  void update(int agent_id, Vertex* new_goal); // partial update
 };

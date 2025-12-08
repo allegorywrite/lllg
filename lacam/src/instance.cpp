@@ -59,6 +59,10 @@ Instance::Instance(const std::string &scen_filename,
   std::string line;
   std::smatch results;
 
+  // Resize predefined goals vector
+  agent_predefined_goals.resize(N);
+  int agent_cnt = 0;
+
   while (getline(file, line)) {
     // for CRLF coding
     if (*(line.end() - 1) == 0x0d) line.pop_back();
@@ -75,6 +79,47 @@ Instance::Instance(const std::string &scen_filename,
       if (s == nullptr || g == nullptr) continue;
       starts.push_back(s);
       goals.push_back(g);
+
+      // Parse additional goals if present
+      // The regex only captures the first start/goal pair. We need to parse the rest of the line.
+      // Format: <bucket> <map> <width> <height> <x_s> <y_s> <x_g> <y_g> <dist> <x_g2> <y_g2> ...
+      // We can find the position after the first goal and parse remaining numbers.
+      
+      // Find the position of the first goal coordinates in the line
+      // The regex matches the whole line, so we can't easily find "where the rest starts" using just the match results for the suffix.
+      // Instead, let's use a stringstream to parse the line manually after the initial match validation.
+      
+      std::stringstream ss(line);
+      std::string segment;
+      std::vector<std::string> tokens;
+      while(std::getline(ss, segment, '\t')) {
+        tokens.push_back(segment);
+      }
+      
+      // Standard format has 9 columns. If more, they are extra goals.
+      // Col 4: x_s, Col 5: y_s, Col 6: x_g, Col 7: y_g, Col 8: dist
+      // Extra goals start from Col 9 (0-indexed) if we assume standard format ends at 8.
+      // Let's check the tokens.
+      // 0: bucket, 1: map, 2: w, 3: h, 4: xs, 5: ys, 6: xg, 7: yg, 8: dist
+      // 9: xg2, 10: yg2, ...
+      
+      if (tokens.size() > 9) {
+        for (size_t k = 8; k + 1 < tokens.size(); k += 2) {
+           try {
+             int x = std::stoi(tokens[k]);
+             int y = std::stoi(tokens[k+1]);
+             if (x >= 0 && x < G->width && y >= 0 && y < G->height) {
+               auto v = G->U[G->width * y + x];
+               if (v != nullptr) {
+                 agent_predefined_goals[agent_cnt].push_back(v);
+               }
+             }
+           } catch (...) {
+             break;
+           }
+        }
+      }
+      agent_cnt++;
     }
 
     if (starts.size() == N) break;

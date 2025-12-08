@@ -45,3 +45,21 @@ void DistTable::setup(const Instance *ins)
 int DistTable::get(const int i, const int v_id) { return table[i][v_id]; }
 
 int DistTable::get(const int i, const Vertex *v) { return get(i, v->id); }
+
+void DistTable::update(int agent_id, Vertex* new_goal)
+{
+  std::fill(table[agent_id].begin(), table[agent_id].end(), K);
+  auto Q = std::queue<Vertex *>({new_goal});
+  table[agent_id][new_goal->id] = 0;
+  while (!Q.empty()) {
+    auto n = Q.front();
+    Q.pop();
+    const int d_n = table[agent_id][n->id];
+    for (auto &m : n->neighbor) {
+      const int d_m = table[agent_id][m->id];
+      if (d_n + 1 >= d_m) continue;
+      table[agent_id][m->id] = d_n + 1;
+      Q.push(m);
+    }
+  }
+}

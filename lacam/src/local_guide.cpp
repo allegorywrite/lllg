@@ -9,6 +9,7 @@
 
 // Definition of static member variables
 bool LocalGuide::ON = true;
+bool LocalGuide::DETERMINISTIC = false;
 int LocalGuide::WINDOW = 10;
 int LocalGuide::NUM_REFINE = 1;
 float LocalGuide::COLLISION_COST = 1.0f;
@@ -184,7 +185,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         break;
       }
       auto&& C = n->where->actions;
-      std::shuffle(C.begin(), C.end(), MT);
+      if (!DETERMINISTIC) std::shuffle(C.begin(), C.end(), MT);
       for (auto&& v : C) {
         const auto t = n->when + 1;
         if (CLOSED[t][v->id] != nullptr) continue;
@@ -242,7 +243,8 @@ LocalHeuristic LocalGuide::get(const int i, Vertex* v)
   if (!ON || NUM_REFINE < 0 || Q_to[i] == nullptr)
     return D->get(i, v);
   if (v == Q_to[i]) return 0;
-  return 1;
+  // return 1;
+  return D->get(i, v) + 1;
 }
 
 void LocalGuide::set_guide_paths(const std::vector<Path>& paths) {

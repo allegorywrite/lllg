@@ -50,7 +50,8 @@ struct HNode {
   // LocalGuideの参照軌道を保存
   std::vector<Path> local_guide_paths;
 
-  HNode(Config _C, DistTable *D, HNode *_parent = nullptr);
+  HNode(Config _C, DistTable *D, HNode *_parent = nullptr,
+        const std::vector<HNodePriority>* initial_priorities = nullptr);
   ~HNode();
 };
 using HNodes = std::vector<HNode *>;
@@ -72,6 +73,13 @@ struct LaCAM {
   Solution last_partial_solution;
   // whether STEP_LIMIT (horizon) was reached during the last solve
   bool reached_horizon;
+  // optional override for the next root priorities
+  std::vector<HNodePriority> initial_root_priorities;
+  bool has_initial_root_priorities = false;
+  // cached priorities assigned to the last root node
+  std::vector<HNodePriority> last_root_priorities;
+  // cached priority sequence for the last reconstructed solution (per depth)
+  std::vector<std::vector<HNodePriority>> last_solution_priorities;
 
   // Hyperparameters
   static bool ANYTIME;
@@ -85,6 +93,12 @@ struct LaCAM {
   bool set_new_config(HNode *S, LNode *M, Config &Q_to);
   const Solution& get_last_partial_solution() const { return last_partial_solution; }
   bool was_horizon_reached() const { return reached_horizon; }
+  void set_initial_priorities(const std::vector<HNodePriority>& priorities);
+  const std::vector<HNodePriority>& get_last_root_priorities() const { return last_root_priorities; }
+  const std::vector<std::vector<HNodePriority>>& get_last_solution_priorities() const
+  {
+    return last_solution_priorities;
+  }
   // utilities
   template <typename... Body>
   void solver_info(const int level, Body &&...body)

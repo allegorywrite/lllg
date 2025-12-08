@@ -1,6 +1,7 @@
 #include "../include/pibt.hpp"
 
 bool PIBT::SWAP = true;
+bool PIBT::DETERMINISTIC = false;
 
 PIBT::PIBT(const Instance *_ins, DistTable *_D, int seed)
     : ins(_ins),
@@ -67,6 +68,11 @@ bool PIBT::set_new_config(const Config &Q_from, Config &Q_to,
 
 bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
 {
+  // if (DETERMINISTIC) {
+  //   std::cout << "funcPIBT called for agent " << i 
+  //             << " at (" << Q_from[i]->x << "," << Q_from[i]->y << ")"
+  //             << " goal=(" << ins->goals[i]->x << "," << ins->goals[i]->y << ")" << std::endl;
+  // }
   const auto K = Q_from[i]->neighbor.size();
 
   auto get_successor_cost = [&](Vertex *u, int u_idx, bool swap = false) {
@@ -82,7 +88,8 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
         lg = 0;
     }
 
-    return std::make_tuple(swap ? -D->get(i, u) : lg, rrd(MT));
+    float tie_breaker = DETERMINISTIC ? 0.0f : rrd(MT);
+    return std::make_tuple(swap ? -D->get(i, u) : lg, tie_breaker);
   };
 
   // set C_next
@@ -124,12 +131,36 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
   };
 
   // main loop
+  // if (DETERMINISTIC && i == 4) {  // Debug agent 5 (index 4)
+  //   std::cout << "Agent " << i << " at " << Q_from[i]->index 
+  //             << " (" << Q_from[i]->x << "," << Q_from[i]->y << ")"
+  //             << " goal=" << ins->goals[i]->index
+  //             << " (" << ins->goals[i]->x << "," << ins->goals[i]->y << ")"
+  //             << " dist=" << D->get(i, ins->goals[i]) << std::endl;
+  //   std::cout << "  Neighbors sorted by cost:" << std::endl;
+  //   for (size_t k_debug = 0; k_debug < K + 1; ++k_debug) {
+  //     auto u_idx_debug = C_indices[i][k_debug];
+  //     auto u_debug = C_next[i][u_idx_debug];
+  //     auto cost = C_cost[u_idx_debug];
+  //     std::cout << "    [" << k_debug << "] vertex=" << u_debug->index
+  //               << " (" << u_debug->x << "," << u_debug->y << ")"
+  //               << " lg=" << std::get<0>(cost)
+  //               << " tie=" << std::get<1>(cost)
+  //               << " dist_to_goal=" << D->get(i, u_debug) << std::endl;
+  //   }
+  // }
   for (size_t k = 0; k < K + 1; ++k) {
     auto u_idx = C_indices[i][k];
     auto u = C_next[i][u_idx];
 
     // avoid vertex conflicts
-    if (occupied_next[u->id] != NO_AGENT) continue;
+    if (occupied_next[u->id] != NO_AGENT) {
+      // if (DETERMINISTIC && i == 4) {
+      //   std::cout << "    k=" << k << " vertex=" << u->index << " (" << u->x << "," << u->y 
+      //             << ") REJECTED: occupied_next by agent " << occupied_next[u->id] << std::endl;
+      // }
+      continue;
+    }
 
     const auto j = occupied_now[u->id];
 
@@ -143,11 +174,27 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
     // priority inheritance
     if (j != NO_AGENT && u != Q_from[i] && Q_to[j] == nullptr &&
         !funcPIBT(j, Q_from, Q_to)) {
+      // if (DETERMINISTIC) {
+      //   std::cout << "  Priority inheritance FAILED: agent " << i << " cannot push agent " << j 
+      //             << " from (" << Q_from[j]->x << "," << Q_from[j]->y << ")" << std::endl;
+      // }
       continue;
     }
+    // if (j != NO_AGENT && u != Q_from[i] && Q_to[j] != nullptr) {
+    //   if (DETERMINISTIC) {
+    //     std::cout << "  Priority inheritance SUCCESS: agent " << i << " pushed agent " << j 
+    //               << " from (" << Q_from[j]->x << "," << Q_from[j]->y << ")"
+    //               << " to (" << Q_to[j]->x << "," << Q_to[j]->y << ")" << std::endl;
+    //   }
+    // }
 
     // success to plan next one step
     if (k == 0) swap_operation();
+    // if (DETERMINISTIC && i == 4) {
+    //   std::cout << "  -> SELECTED: vertex=" << u->index
+    //             << " (" << u->x << "," << u->y << ")"
+    //             << " at priority k=" << k << std::endl;
+    // }
     return true;
   }
 

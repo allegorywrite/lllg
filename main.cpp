@@ -74,6 +74,12 @@ int main(int argc, char *argv[])
   program.add_argument("--lns").default_value(false).implicit_value(true);
   program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
 
+  // deterministic
+  program.add_argument("-d", "--deterministic")
+      .help("disable randomness in solver (PIBT/LocalGuide)")
+      .default_value(false)
+      .implicit_value(true);
+
   try {
     program.parse_args(argc, argv);
   } catch (const std::runtime_error &err) {
@@ -130,6 +136,11 @@ int main(int argc, char *argv[])
   // lns, plns
   LNS::ON = program.get<bool>("lns");
   PLNS::NUM_REFINERS = program.get<int>("plns_num_refiners");
+
+  // deterministic
+  const auto deterministic = program.get<bool>("deterministic");
+  PIBT::DETERMINISTIC = deterministic;
+  LocalGuide::DETERMINISTIC = deterministic;
 
   // solve
 //   const auto use_sipp = program.get<bool>("use_sipp");

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <random>
 #include <string>
+#include <utility>
 
 int run_lifelong(const Instance& base_ins,
                  int verbose,
@@ -30,8 +31,18 @@ int run_lifelong(const Instance& base_ins,
   // Accumulate per-executed-step LocalGuide paths (one window per agent)
   std::vector<std::vector<Path>> local_guidance_history;
 
+  // Local copy of predefined goals to consume
+  auto predefined_goals = base_ins.agent_predefined_goals;
+
   // Helper: generate a new random goal for agent i
   auto generate_random_goal = [&](int agent_id) -> Vertex* {
+    // Check predefined goals first
+    if (agent_id < (int)predefined_goals.size() && !predefined_goals[agent_id].empty()) {
+      auto v = predefined_goals[agent_id].front();
+      predefined_goals[agent_id].pop_front();
+      return v;
+    }
+
     std::vector<Vertex*> candidates;
     candidates.reserve(G->V.size());
     for (auto v : G->V) {
@@ -48,6 +59,9 @@ int run_lifelong(const Instance& base_ins,
     return candidates[dist(rng)];
   };
 
+  // Initialize DistTable once
+  auto D = DistTable(base_ins);
+
   // Outer loop over execution steps
   const int max_steps = steps_limit;
   int steps_done = 0;
@@ -55,12 +69,17 @@ int run_lifelong(const Instance& base_ins,
   Solution prev_plan;  // previous cycle's full plan (for seeding guide)
   std::vector<Path> prev_local_guide_paths;  // previous cycle's LocalGuide step-0 paths
   bool prev_local_guide_paths_valid = false;
+  std::vector<HNodePriority> prev_step_priorities;
 
   while (max_steps < 0 || steps_done < max_steps) {
     // Update goals for agents that have reached their goals
     for (int i = 0; i < (int)base_ins.N; ++i) {
       if (current_config[i] == current_goals[i]) {
-        if (auto ng = generate_random_goal(i)) current_goals[i] = ng;
+        if (auto ng = generate_random_goal(i)) {
+          current_goals[i] = ng;
+          // Update DistTable for this agent
+          D.update(i, ng);
+        }
       }
     }
 
@@ -72,6 +91,17 @@ int run_lifelong(const Instance& base_ins,
     auto cyc_start = std::chrono::high_resolution_clock::now();
     auto cyc_deadline = Deadline(time_limit_sec * 1000);
     std::function<void(LaCAM&)> init_cb = nullptr;
+    auto append_init_cb = [&](std::function<void(LaCAM&)> extra_cb) {
+      if (!extra_cb) return;
+      if (!init_cb) init_cb = std::move(extra_cb);
+      else {
+        auto prev_cb = init_cb;
+        init_cb = [prev_cb, extra_cb = std::move(extra_cb)](LaCAM& lacam_ref) {
+          prev_cb(lacam_ref);
+          extra_cb(lacam_ref);
+        };
+      }
+    };
     std::vector<Path> seed_paths; // keep alive until init_cb executes
     const bool can_seed = LocalGuide::ON && LocalGuide::WINDOW > 0 && seed_mode != LifelongSeedMode::None;
     if (can_seed) {
@@ -84,17 +114,25 @@ int run_lifelong(const Instance& base_ins,
             else seed_paths[i][t] = current_goals[i];
           }
         }
-        init_cb = [&seed_paths](LaCAM& lacam_ref) {
+        append_init_cb([&seed_paths](LaCAM& lacam_ref) {
           lacam_ref.local_guide.set_guide_paths(seed_paths);
-        };
+        });
       } else if (seed_mode == LifelongSeedMode::PrevLocalGuide && prev_local_guide_paths_valid) {
         seed_paths = prev_local_guide_paths;
-        init_cb = [&seed_paths](LaCAM& lacam_ref) {
+        append_init_cb([&seed_paths](LaCAM& lacam_ref) {
           lacam_ref.local_guide.set_guide_paths(seed_paths);
-        };
+        });
       }
     }
-    auto result = solve_with_timing(cyc_ins, verbose - 1, &cyc_deadline, seed, init_cb);
+    if ((int)prev_step_priorities.size() == cyc_ins.N) {
+      append_init_cb([&prev_step_priorities](LaCAM& lacam_ref) {
+        lacam_ref.set_initial_priorities(prev_step_priorities);
+      });
+    } else if (!prev_step_priorities.empty()) {
+      prev_step_priorities.clear();
+    }
+    // Pass existing DistTable
+    auto result = solve_with_timing(cyc_ins, verbose - 1, &cyc_deadline, seed, init_cb, &D);
     auto sol = result.solution;
     auto lacam = result.lacam;
     auto cyc_end = std::chrono::high_resolution_clock::now();
@@ -131,12 +169,17 @@ int run_lifelong(const Instance& base_ins,
     }
 
     // Execute exactly one step: solved -> use sol, subsolved -> use partial, failed -> stay
+    int priority_index_for_next_config = -1;
     Config next_config = current_config;
     if (cycle_solved && sol.size() >= 2) {
       next_config = sol[1];
+      priority_index_for_next_config = 1;
     } else if (cycle_subsolved) {
       const auto& partial = lacam->get_last_partial_solution();
-      if (!partial.empty() && partial.size() >= 2) next_config = partial[1];
+      if (!partial.empty() && partial.size() >= 2) {
+        next_config = partial[1];
+        priority_index_for_next_config = 1;
+      }
     }
 
     // Record local guidance for this executed step (use step-0 guidance of this cycle)
@@ -166,6 +209,18 @@ int run_lifelong(const Instance& base_ins,
     // Advance
     current_config = next_config;
     prev_plan = sol;  // remember last full plan for next cycle seeding
+    if (lacam != nullptr) {
+      const auto& solution_priorities = lacam->get_last_solution_priorities();
+      if (priority_index_for_next_config >= 0 &&
+          priority_index_for_next_config < (int)solution_priorities.size() &&
+          (int)solution_priorities[priority_index_for_next_config].size() == cyc_ins.N) {
+        prev_step_priorities = solution_priorities[priority_index_for_next_config];
+      } else {
+        prev_step_priorities.clear();
+      }
+    } else {
+      prev_step_priorities.clear();
+    }
     delete lacam;
 
     // Stop if no movement is possible and no steps limit specified

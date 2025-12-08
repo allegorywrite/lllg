@@ -66,6 +66,7 @@ struct LocalGuide {
 
   // hyper parameters
   static bool ON;
+  static bool DETERMINISTIC;
   static int WINDOW;
   static int NUM_REFINE;
   static float COLLISION_COST;  // Collision cost

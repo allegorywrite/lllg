@@ -43,6 +43,7 @@ struct PIBT {
 
   // hyper parameters
   static bool SWAP;
+  static bool DETERMINISTIC;
 
   // guidance
   GlobalGuide *global_guide;
