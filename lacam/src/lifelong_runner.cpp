@@ -17,7 +17,8 @@ int run_lifelong(const Instance& base_ins,
                  const std::string& output_name,
                  const std::string& map_name,
                  bool log_short,
-                 LifelongSeedMode seed_mode)
+                 LifelongSeedMode seed_mode,
+                 bool log_all_step)
 {
   // Prepare state
   auto G = base_ins.G;
@@ -73,10 +74,12 @@ int run_lifelong(const Instance& base_ins,
 
   while (max_steps < 0 || steps_done < max_steps) {
     // Update goals for agents that have reached their goals
+    std::vector<bool> goal_updated(base_ins.N, false);
     for (int i = 0; i < (int)base_ins.N; ++i) {
       if (current_config[i] == current_goals[i]) {
         if (auto ng = generate_random_goal(i)) {
           current_goals[i] = ng;
+          goal_updated[i] = true;
           // Update DistTable for this agent
           D.update(i, ng);
         }
@@ -108,10 +111,12 @@ int run_lifelong(const Instance& base_ins,
       if (seed_mode == LifelongSeedMode::PrevPlan && !prev_plan.empty()) {
         seed_paths.assign(cyc_ins.N, Path(LocalGuide::WINDOW, nullptr));
         for (int i = 0; i < (int)cyc_ins.N; ++i) {
-          seed_paths[i][0] = current_config[i];
-          for (int t = 1; t < LocalGuide::WINDOW; ++t) {
-            if (t + 1 < (int)prev_plan.size()) seed_paths[i][t] = prev_plan[t + 1][i];
-            else seed_paths[i][t] = current_goals[i];
+          if (goal_updated[i]) continue; // Skip seeding if goal was updated
+          // seed_paths[i][0] = current_config[i];
+          for (int t = 0; t < LocalGuide::WINDOW; ++t) {
+            if (t < (int)prev_plan.size()) seed_paths[i][t] = prev_plan[t][i];
+            // else seed_paths[i][t] = current_goals[i];
+            else seed_paths[i][t] = prev_plan.back()[i];
           }
         }
         append_init_cb([&seed_paths](LaCAM& lacam_ref) {
@@ -147,7 +152,8 @@ int run_lifelong(const Instance& base_ins,
     print_stats(verbose, &cyc_deadline, cyc_ins, sol, cyc_comp_time_ms, label);
 
     // If failed (not reaching goals), dump a one-shot log for this cycle to result_stepX.txt
-    if (!cycle_solved && !cycle_subsolved) {
+    // If failed (not reaching goals) or log_all_step is enabled, dump a one-shot log for this cycle to result_stepX.txt
+    if (log_all_step || (!cycle_solved && !cycle_subsolved)) {
       // Build filename: <output_name without extension>_step<steps_done>.txt
       auto out_path = output_name;
       auto slash_pos = out_path.find_last_of('/');
@@ -159,11 +165,11 @@ int run_lifelong(const Instance& base_ins,
       std::string ext = out_path.substr(dot_pos);
       if (ext.empty()) ext = ".txt";
       std::string per_cycle_name = stem + "_step" + std::to_string(steps_done) + ext;
-      // Backtrack partial solution from LaCAM's deepest explored node
-      const auto& partial = lacam->get_last_partial_solution();
-      bool solved_override = false; // explicit: failed
-      make_log(cyc_ins, partial, per_cycle_name, cyc_comp_time_ms, map_name, seed,
-               /*log_short=*/false, /*local_guide=*/nullptr, /*comp_time_init_ms=*/-1.0,
+      // Backtrack partial solution from LaCAM's deepest explored node if not solved
+      const auto& solution_to_log = cycle_solved ? sol : lacam->get_last_partial_solution();
+      bool solved_override = cycle_solved;
+      make_log(cyc_ins, solution_to_log, per_cycle_name, cyc_comp_time_ms, map_name, seed,
+               /*log_short=*/false, /*local_guide=*/(lacam ? &lacam->local_guide : nullptr), /*comp_time_init_ms=*/-1.0,
                /*solution_init=*/{}, /*lifelong_goals_history=*/nullptr, /*goal_change_count=*/0,
                /*local_guidance_history=*/nullptr, /*override_solved=*/&solved_override);
     }

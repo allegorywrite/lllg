@@ -208,22 +208,32 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   };
 
   // create initial candidate (skip when NUM_REFINE=0)
-  if (NUM_REFINE != 0) {
-    for (auto i = 0; i < N; ++i) {
-      if (guide_paths[i].size() <= 1) continue;
-      if (Q_from[i] != guide_paths[i][1]) continue;
-      for (auto t = 0; t < WINDOW - 1; ++t) {
-        guide_paths[i][t] = guide_paths[i][t + 1];
-      }
-      CT.enrollPath(i, guide_paths[i]);
+  // if (NUM_REFINE != 0) {
+  //   for (auto i = 0; i < N; ++i) {
+  //     if (guide_paths[i].size() <= 1) continue;
+  //     if (Q_from[i] != guide_paths[i][1]) continue;
+  //     for (auto t = 0; t < WINDOW - 1; ++t) {
+  //       guide_paths[i][t] = guide_paths[i][t + 1];
+  //     }
+  //     CT.enrollPath(i, guide_paths[i]);
+  //   }
+  // }
+  for (auto i = 0; i < N; ++i) {
+    if (guide_paths[i].size() <= 1) continue;
+    if (Q_from[i] != guide_paths[i][1]) continue;
+    for (auto t = 0; t < WINDOW - 1; ++t) {
+      guide_paths[i][t] = guide_paths[i][t + 1];
     }
+    CT.enrollPath(i, guide_paths[i]);
   }
 
   // Reference trajectory improvement
   int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;
+  // int refine_iterations = NUM_REFINE;
   for (auto k = 0; k < refine_iterations; ++k) {
     for (auto _i = 0; _i < N; ++_i) {
       const auto i = order[_i];
+      if (NUM_REFINE == 0 && guide_paths[i][0] != guide_paths[i].back()) continue;
       Q_to[i] = nullptr;
       CT.clearPath(i, guide_paths[i]);
       update_guide_path(i);

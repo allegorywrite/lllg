@@ -47,6 +47,9 @@ int main(int argc, char *argv[])
   program.add_argument("-l", "--log_short")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--log-all-step")
+      .default_value(false)
+      .implicit_value(true);
   program.add_argument("--lifelong_seed_mode")
       .help("initialization source for Lifelong LaCAM local guide: plan, local_guide, none")
       .default_value(std::string("local_guide"));
@@ -182,6 +185,7 @@ int main(int argc, char *argv[])
   }
 
   // Lifelong LaCAM mode (outer loop: replan each step)
+  const auto log_all_step = program.get<bool>("log-all-step");
   return run_lifelong(ins, verbose, time_limit_sec, seed, steps_limit,
-                      output_name, map_name, log_short, lifelong_seed_mode);
+                      output_name, map_name, log_short, lifelong_seed_mode, log_all_step);
 }

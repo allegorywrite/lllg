@@ -19,4 +19,5 @@ int run_lifelong(const Instance& base_ins,
                  const std::string& output_name,
                  const std::string& map_name,
                  bool log_short,
-                 LifelongSeedMode seed_mode);
+                 LifelongSeedMode seed_mode,
+                 bool log_all_step = false);
