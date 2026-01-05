@@ -19,8 +19,8 @@
 #include "local_guide.hpp"
 #include "utils.hpp"
 
-// lg, tie
-using PIBTHeuristic = std::tuple<int, float>;
+// primary_cost, tie-break keys (lexicographic)
+using PIBTHeuristic = std::tuple<int, float, float, float>;
 
 struct PIBT {
   const Instance *ins;
@@ -44,6 +44,8 @@ struct PIBT {
   // hyper parameters
   static bool SWAP;
   static bool DETERMINISTIC;
+  static bool NEXT_STEP_HINDRANCE;
+  static int SWITCH_ORDER;
 
   // guidance
   GlobalGuide *global_guide;

@@ -59,6 +59,16 @@ int main(int argc, char *argv[])
       .default_value(false)
       .implicit_value(true);
 
+  // PIBT tie-breaking (ported from pibt-tiebreaking)
+  program.add_argument("--no_hindrance")
+      .help("disable PIBT next-step hindrance tie-break")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--pibt_sort")
+      .help("PIBT tie-break mode: 0=legacy(random), 1=prefer-free, 2=hindrance, 3=random+hindrance")
+      .scan<'d', int>()
+      .default_value(0);
+
   program.add_argument("--lg").default_value(false).implicit_value(true);
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
   program.add_argument("--lg_window").scan<'d', int>().default_value(10);
@@ -133,6 +143,8 @@ int main(int argc, char *argv[])
 
   // pibt
   PIBT::SWAP = !program.get<bool>("no_pibt_swap");
+  PIBT::NEXT_STEP_HINDRANCE = !program.get<bool>("no_hindrance");
+  PIBT::SWITCH_ORDER = program.get<int>("pibt_sort");
   // LaCAM horizon
   LaCAM::STEP_LIMIT = program.get<int>("lacam_horizon");
 

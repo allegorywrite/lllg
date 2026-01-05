@@ -2,6 +2,8 @@
 
 bool PIBT::SWAP = true;
 bool PIBT::DETERMINISTIC = false;
+bool PIBT::NEXT_STEP_HINDRANCE = true;
+int PIBT::SWITCH_ORDER = 0;
 
 PIBT::PIBT(const Instance *_ins, DistTable *_D, int seed)
     : ins(_ins),
@@ -75,6 +77,17 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
   // }
   const auto K = Q_from[i]->neighbor.size();
 
+  const bool use_hindrance = NEXT_STEP_HINDRANCE && (SWITCH_ORDER == 2 || SWITCH_ORDER == 3);
+  int neighbor_agent_idx = 0;
+  if (use_hindrance) {
+    for (auto u : Q_from[i]->neighbor) {
+      if (occupied_now[u->id] != NO_AGENT) {
+        neighbor_agents[neighbor_agent_idx] = occupied_now[u->id];
+        neighbor_agent_idx += 1;
+      }
+    }
+  }
+
   auto get_successor_cost = [&](Vertex *u, int u_idx, bool swap = false) {
     auto lg = (local_guide != nullptr) ? local_guide->get(i, u) : D->get(i, u);
 
@@ -88,8 +101,35 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
         lg = 0;
     }
 
+    float next_step_hindrance = 0.0f;
+    if (use_hindrance) {
+      for (int k = 0; k < neighbor_agent_idx; ++k) {
+        const auto j = neighbor_agents[k];
+        if (Q_from[j] != u && D->get(j, u) < D->get(j, Q_from[j])) next_step_hindrance += 1.0f;
+      }
+    }
+
+    float inheri = 0.0f;
+    if (occupied_now[u->id] != NO_AGENT) inheri = 1.0f;
+
     float tie_breaker = DETERMINISTIC ? 0.0f : rrd(MT);
-    return std::make_tuple(swap ? -D->get(i, u) : lg, tie_breaker);
+    const int primary_cost = swap ? -D->get(i, u) : lg;
+
+    // Switchable tie-breaking (ported from pibt-tiebreaking).
+    // 0: legacy (primary, random)
+    // 1: prefer unoccupied (primary, inheri, random)
+    // 2: prefer low hindrance (primary, hindrance, random)
+    // 3: legacy + hindrance (primary, random, hindrance)
+    if (SWITCH_ORDER == 1) {
+      return std::make_tuple(primary_cost, inheri, tie_breaker, 0.0f);
+    }
+    if (SWITCH_ORDER == 2) {
+      return std::make_tuple(primary_cost, next_step_hindrance, tie_breaker, inheri);
+    }
+    if (SWITCH_ORDER == 3) {
+      return std::make_tuple(primary_cost, tie_breaker, next_step_hindrance, inheri);
+    }
+    return std::make_tuple(primary_cost, tie_breaker, 0.0f, 0.0f);
   };
 
   // set C_next
