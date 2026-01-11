@@ -2,7 +2,7 @@
 
 bool LaCAM::ANYTIME = false;
 int LaCAM::STEP_LIMIT = -1;
-bool LaCAM::TERMINATE_ON_ALL_ARRIVED = false;
+bool LaCAM::RELAX_GOAL = false;
 
 HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
              const std::vector<HNodePriority>* initial_priorities)
@@ -166,7 +166,7 @@ Solution LaCAM::solve()
   auto H_init = new HNode(ins->starts, D, nullptr, root_priority_override);
   last_root_priorities = H_init->priorities;
   OPEN.push_front(H_init);
-  if (!TERMINATE_ON_ALL_ARRIVED) {
+  if (!RELAX_GOAL) {
     EXPLORED[H_init->Q] = H_init;
   } else {
     EXPLORED_ARRIVED[ArrivedKey{H_init->Q, H_init->arrived_goal}] = H_init;
@@ -208,7 +208,7 @@ Solution LaCAM::solve()
 
     // check goal condition
     const bool is_goal =
-        (!TERMINATE_ON_ALL_ARRIVED)
+        (!RELAX_GOAL)
             ? is_same_config(H->Q, ins->goals)
             : (H->arrived_goal_cnt == static_cast<int>(ins->N));
     if (is_goal) {
@@ -258,7 +258,7 @@ Solution LaCAM::solve()
     // }
 
     // check explored list
-    if (!TERMINATE_ON_ALL_ARRIVED) {
+    if (!RELAX_GOAL) {
       auto iter = EXPLORED.find(Q_to);
       if (iter != EXPLORED.end()) {
         // known configuration

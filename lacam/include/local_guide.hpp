@@ -3,6 +3,7 @@
  */
 
 #pragma once
+#include <cstdint>
 #include "collision_table.hpp"
 #include "dist_table.hpp"
 #include "global_guide.hpp"
@@ -67,6 +68,9 @@ struct LocalGuide {
   // hyper parameters
   static bool ON;
   static bool DETERMINISTIC;
+  // If true, temporarily remove agents currently on their goal from the local
+  // CollisionTable before refining other agents' reference paths.
+  static bool CLEAR_GOAL_FIRST;
   static int WINDOW;
   static int NUM_REFINE;
   static float COLLISION_COST;  // Collision cost

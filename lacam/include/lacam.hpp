@@ -93,7 +93,7 @@ struct LaCAM {
   static int STEP_LIMIT;
   // If true, terminate when every agent has reached its goal at least once
   // (not necessarily simultaneously).
-  static bool TERMINATE_ON_ALL_ARRIVED;
+  static bool RELAX_GOAL;
 
   LaCAM(const Instance *_ins, DistTable *_D, int _verbose = 0,
         const Deadline *_deadline = nullptr, int _seed = 0);

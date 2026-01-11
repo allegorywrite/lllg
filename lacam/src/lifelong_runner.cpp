@@ -145,7 +145,12 @@ int run_lifelong(const Instance& base_ins,
     total_comp_time_ms += cyc_comp_time_ms;
 
     // Determine solved / subsolved
-    bool cycle_solved = is_feasible_solution(cyc_ins, sol, /*verbose=*/0);
+    // Note: in relax-goal mode, the final configuration does not need to match goals.
+    const bool relax_goal = LaCAM::RELAX_GOAL;
+    const bool cycle_solved =
+        !sol.empty() &&
+        (relax_goal ? is_feasible_solution_relax_goal(cyc_ins, sol, /*verbose=*/0)
+                    : is_feasible_solution(cyc_ins, sol, /*verbose=*/0));
     bool cycle_subsolved = (!cycle_solved && lacam != nullptr && lacam->was_horizon_reached());
     // Per-cycle stats (concise) with label override
     const char* label = cycle_solved ? "solved" : (cycle_subsolved ? "subsolved" : "failed");

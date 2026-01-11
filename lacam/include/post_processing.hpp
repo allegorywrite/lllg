@@ -2,6 +2,7 @@
  * post processing, e.g., calculating solution quality
  */
 #pragma once
+#include <cstdint>
 #include "dist_table.hpp"
 #include "instance.hpp"
 #include "local_guide.hpp" 
@@ -10,6 +11,10 @@
 
 bool is_feasible_solution(const Instance &ins, const Solution &solution,
                           const int verbose = 0);
+// Relaxed goal condition: each agent must have visited its goal at least once
+// (the final configuration does not need to equal goals).
+bool is_feasible_solution_relax_goal(const Instance &ins, const Solution &solution,
+                                     const int verbose = 0);
 void print_stats(const int verbose, const Deadline *deadline,
                  const Instance &ins, const Solution &solution,
                  const double comp_time_ms, const char* state_label = nullptr);

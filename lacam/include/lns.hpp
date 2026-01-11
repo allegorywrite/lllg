@@ -39,13 +39,26 @@ struct LNS {
   std::vector<int> order;
   CollisionTable CT;
   int loop_cnt;
+  std::vector<int> intersection_vertices;
 
   // Hyperparametes
+  enum class NeighborhoodStrategy {
+    RandomBlock,   // legacy: shuffle order then take contiguous blocks
+    RandomAgents,  // sample agents uniformly at random
+    Intersection,  // collect agents around random intersections
+    RandomWalk,    // collect agents by random-walking a delayed agent
+  };
   static bool ON;
   static int MAX_LOOP_CNT;
-  // -1 keeps classic goal-absorbing collision model; >=0 enables finite-horizon
-  // refinement over timesteps [0..HORIZON].
-  static int HORIZON;
+  // If true, refine under the relaxed goal condition:
+  // each agent must reach its goal at least once (not necessarily stay there).
+  static bool RELAX_GOAL_CONDITION;
+  // If true under RELAX_GOAL_CONDITION, prioritize having agents at their goals
+  // at t=1 (lexicographically, then time-to-first-goal).
+  static bool RELAX_OBJECTIVE_T1;
+  static NeighborhoodStrategy NEIGHBOR_STRATEGY;
+  // Neighborhood size. If < 0, use the legacy size sampling logic.
+  static int NEIGHBOR_SIZE;
 
   LNS(const Instance *_ins, DistTable *_D, Solution &_solution,
       const Deadline *_deadline, const int seed = 0, const int _verbose = 0);

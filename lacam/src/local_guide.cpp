@@ -10,6 +10,7 @@
 // Definition of static member variables
 bool LocalGuide::ON = true;
 bool LocalGuide::DETERMINISTIC = false;
+bool LocalGuide::CLEAR_GOAL_FIRST = false;
 int LocalGuide::WINDOW = 10;
 int LocalGuide::NUM_REFINE = 1;
 float LocalGuide::COLLISION_COST = 1.0f;
@@ -79,6 +80,17 @@ int LocalGuide::get_history_size() const
 void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
   if (!ON || NUM_REFINE < 0) return;
+
+  std::vector<uint8_t> is_at_goal;
+  if (CLEAR_GOAL_FIRST) {
+    is_at_goal.assign(N, 0);
+    for (int i = 0; i < N; ++i) {
+      if (Q_from[i] != nullptr && ins->goals[i] != nullptr &&
+          Q_from[i]->id == ins->goals[i]->id) {
+        is_at_goal[i] = 1;
+      }
+    }
+  }
 
   // Minimal debug to catch early crashes on first call
   try {
@@ -231,13 +243,28 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;
   // int refine_iterations = NUM_REFINE;
   for (auto k = 0; k < refine_iterations; ++k) {
+    if (CLEAR_GOAL_FIRST && !is_at_goal.empty()) {
+      for (int i = 0; i < N; ++i) {
+        if (!is_at_goal[i]) continue;
+        CT.clearPath(i, guide_paths[i]);
+      }
+    }
     for (auto _i = 0; _i < N; ++_i) {
       const auto i = order[_i];
+      if (CLEAR_GOAL_FIRST && !is_at_goal.empty() && is_at_goal[i]) continue;
       if (NUM_REFINE == 0 && guide_paths[i][0] != guide_paths[i].back()) continue;
       Q_to[i] = nullptr;
       CT.clearPath(i, guide_paths[i]);
       update_guide_path(i);
       CT.enrollPath(i, guide_paths[i]);
+    }
+    if (CLEAR_GOAL_FIRST && !is_at_goal.empty()) {
+      for (int i = 0; i < N; ++i) {
+        if (!is_at_goal[i]) continue;
+        Q_to[i] = nullptr;
+        update_guide_path(i);
+        CT.enrollPath(i, guide_paths[i]);
+      }
     }
   }
   

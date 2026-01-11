@@ -32,8 +32,8 @@ int main(int argc, char *argv[])
       .help("limit LaCAM high-level depth (solution steps); -1 for unlimited")
       .scan<'d', int>()
       .default_value(-1);
-  program.add_argument("--terminate_on_all_arrived")
-      .help("terminate when every agent has reached its goal at least once (not necessarily simultaneously)")
+  program.add_argument("--relax_goal")
+      .help("relax goal condition: each agent must visit its goal at least once (not necessarily simultaneously)")
       .default_value(false)
       .implicit_value(true);
   // Lifelong control
@@ -89,11 +89,17 @@ int main(int argc, char *argv[])
   program.add_argument("--gg").default_value(false).implicit_value(true);
 
   program.add_argument("--lns").default_value(false).implicit_value(true);
-  program.add_argument("--lns_horizon")
-      .help("LNS horizon; -1 keeps classic goal-absorbing paths, >=0 plans 0..H steps (fixed horizon) for refinement")
+  program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
+  program.add_argument("--lns_nb_strategy")
+      .help("LNS neighborhood selection: block, random, intersection, randomwalk")
+      .default_value(std::string("block"));
+  program.add_argument("--lns_nb_size")
+      .help("LNS neighborhood size; -1 uses legacy size sampling")
       .scan<'d', int>()
       .default_value(-1);
-  program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
+  program.add_argument("--lns_relax_objective")
+      .help("LNS objective under --relax_goal: first_goal_time, t1")
+      .default_value(std::string("first_goal_time"));
 
   // deterministic
   program.add_argument("-d", "--deterministic")
@@ -144,6 +150,7 @@ int main(int argc, char *argv[])
 
   LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
   LocalGuide::COLLISION_COST_ORDER = program.get<float>("lg_collision_cost_order");
+  LocalGuide::CLEAR_GOAL_FIRST = program.get<bool>("relax_goal");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
@@ -155,12 +162,42 @@ int main(int argc, char *argv[])
   PIBT::SWITCH_ORDER = program.get<int>("pibt_sort");
   // LaCAM horizon
   LaCAM::STEP_LIMIT = program.get<int>("lacam_horizon");
-  LaCAM::TERMINATE_ON_ALL_ARRIVED = program.get<bool>("terminate_on_all_arrived");
+  LaCAM::RELAX_GOAL = program.get<bool>("relax_goal");
 
   // lns, plns
   LNS::ON = program.get<bool>("lns");
-  LNS::HORIZON = program.get<int>("lns_horizon");
+  LNS::RELAX_GOAL_CONDITION = program.get<bool>("relax_goal");
+  {
+    // Only meaningful when RELAX_GOAL_CONDITION is enabled.
+    const auto obj = program.get<std::string>("lns_relax_objective");
+    if (!LNS::RELAX_GOAL_CONDITION || obj == "first_goal_time") {
+      LNS::RELAX_OBJECTIVE_T1 = false;
+    } else if (obj == "t1") {
+      LNS::RELAX_OBJECTIVE_T1 = true;
+    } else {
+      std::cerr << "Unknown --lns_relax_objective '" << obj
+                << "'. Falling back to 'first_goal_time'." << std::endl;
+      LNS::RELAX_OBJECTIVE_T1 = false;
+    }
+  }
   PLNS::NUM_REFINERS = program.get<int>("plns_num_refiners");
+  LNS::NEIGHBOR_SIZE = program.get<int>("lns_nb_size");
+  {
+    const auto nb = program.get<std::string>("lns_nb_strategy");
+    if (nb == "block") {
+      LNS::NEIGHBOR_STRATEGY = LNS::NeighborhoodStrategy::RandomBlock;
+    } else if (nb == "random") {
+      LNS::NEIGHBOR_STRATEGY = LNS::NeighborhoodStrategy::RandomAgents;
+    } else if (nb == "intersection") {
+      LNS::NEIGHBOR_STRATEGY = LNS::NeighborhoodStrategy::Intersection;
+    } else if (nb == "randomwalk") {
+      LNS::NEIGHBOR_STRATEGY = LNS::NeighborhoodStrategy::RandomWalk;
+    } else {
+      std::cerr << "Unknown --lns_nb_strategy '" << nb
+                << "'. Falling back to 'block'." << std::endl;
+      LNS::NEIGHBOR_STRATEGY = LNS::NeighborhoodStrategy::RandomBlock;
+    }
+  }
 
   // deterministic
   const auto deterministic = program.get<bool>("deterministic");
@@ -189,19 +226,33 @@ int main(int argc, char *argv[])
     }
 
     // check feasibility
-    if (!is_feasible_solution(ins, solution, verbose)) {
+    const auto relax_goal = program.get<bool>("relax_goal");
+    const bool feasible = relax_goal
+                              ? is_feasible_solution_relax_goal(ins, solution, verbose)
+                              : is_feasible_solution(ins, solution, verbose);
+    if (!feasible) {
       info(0, verbose, &deadline, "invalid solution");
       delete lacam;
       return 1;
     }
 
     // post processing
-    print_stats(verbose, &deadline, ins, solution, comp_time_ms);
+    const char* solved_label = relax_goal ? "solved" : nullptr;
+    print_stats(verbose, &deadline, ins, solution, comp_time_ms, solved_label);
     // Only pass comp_time_init_ms if LNS was used
     const auto comp_time_init_to_log = LNS::ON ? comp_time_init_ms : -1.0;
     const auto empty_solution = Solution();
     const auto& solution_init_to_log = LNS::ON ? solution_init : empty_solution;
-    make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short, &lacam->local_guide, comp_time_init_to_log, solution_init_to_log);
+    if (relax_goal) {
+      const bool solved_override = true;
+      make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short,
+               &lacam->local_guide, comp_time_init_to_log, solution_init_to_log,
+               /*lifelong_goals_history=*/nullptr, /*goal_change_count=*/0,
+               /*local_guidance_history=*/nullptr, &solved_override);
+    } else {
+      make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short,
+               &lacam->local_guide, comp_time_init_to_log, solution_init_to_log);
+    }
     delete lacam;
     return 0;
   }
