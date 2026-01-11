@@ -2,6 +2,7 @@
 
 bool LaCAM::ANYTIME = false;
 int LaCAM::STEP_LIMIT = -1;
+bool LaCAM::TERMINATE_ON_ALL_ARRIVED = false;
 
 HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
              const std::vector<HNodePriority>* initial_priorities)
@@ -12,7 +13,10 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
       priorities(Q.size()),
       order(Q.size(), 0),
       search_tree(),
-      local_guide_paths()
+      local_guide_paths(),
+      arrived_goal(parent == nullptr ? std::vector<uint8_t>(Q.size(), 0)
+                                     : parent->arrived_goal),
+      arrived_goal_cnt(parent == nullptr ? 0 : parent->arrived_goal_cnt)
 {
   search_tree.push(new LNode());
   const auto N = Q.size();
@@ -24,24 +28,32 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
        initial_priorities->size() == N);
 
   for (auto i = 0; i < N; ++i) {
+    const auto dist_to_goal = D->get(i, Q[i]);
+
     // set priorities
     if (has_override) {
       priorities[i] = (*initial_priorities)[i];
-      std::get<2>(priorities[i]) = (float)D->get(i, Q[i]) / 10000;
+      std::get<2>(priorities[i]) = (float)dist_to_goal / 10000;
     } else if (parent == nullptr) {
       // initialize
-      priorities[i] = std::make_tuple(0, 0, (float)D->get(i, Q[i]) / 10000);
+      priorities[i] = std::make_tuple(0, 0, (float)dist_to_goal / 10000);
     } else {
       // dynamic priorities, akin to PIBT
       auto &&pp = parent->priorities[i];
-      auto p = (D->get(i, Q[i]) != 0) ? (std::get<0>(pp) + 1) : 0;
-      auto q = (D->get(i, Q[i]) == 0) ? std::get<1>(pp) - 1 : 0;
+      auto p = (dist_to_goal != 0) ? (std::get<0>(pp) + 1) : 0;
+      auto q = (dist_to_goal == 0) ? std::get<1>(pp) - 1 : 0;
       priorities[i] = std::make_tuple(p, q, std::get<2>(pp));
     }
 
     // compute cost, sum-of-loss
     if (parent != nullptr) {
-      if (parent->Q[i] != Q[i] || D->get(i, Q[i]) > 0) g += 1;
+      if (parent->Q[i] != Q[i] || dist_to_goal > 0) g += 1;
+    }
+
+    // update arrived-goal flags (monotone)
+    if (dist_to_goal == 0 && arrived_goal[i] == 0) {
+      arrived_goal[i] = 1;
+      ++arrived_goal_cnt;
     }
   }
 
@@ -120,6 +132,28 @@ Solution LaCAM::solve()
   // setup search
   auto OPEN = std::deque<HNode *>();
   auto EXPLORED = std::unordered_map<Config, HNode *, ConfigHasher>();
+  struct ArrivedKey {
+    Config Q;
+    std::vector<uint8_t> arrived_goal;
+  };
+  struct ArrivedKeyHasher {
+    std::size_t operator()(const ArrivedKey &k) const
+    {
+      std::size_t h = static_cast<std::size_t>(ConfigHasher{}(k.Q));
+      for (auto b : k.arrived_goal) {
+        h ^= static_cast<std::size_t>(b) + 0x9e3779b9 + (h << 6) + (h >> 2);
+      }
+      return h;
+    }
+  };
+  struct ArrivedKeyEq {
+    bool operator()(const ArrivedKey &a, const ArrivedKey &b) const
+    {
+      return is_same_config(a.Q, b.Q) && a.arrived_goal == b.arrived_goal;
+    }
+  };
+  auto EXPLORED_ARRIVED =
+      std::unordered_map<ArrivedKey, HNode *, ArrivedKeyHasher, ArrivedKeyEq>();
   HNodes GC_HNodes;
 
   // insert initial node
@@ -132,7 +166,11 @@ Solution LaCAM::solve()
   auto H_init = new HNode(ins->starts, D, nullptr, root_priority_override);
   last_root_priorities = H_init->priorities;
   OPEN.push_front(H_init);
-  EXPLORED[H_init->Q] = H_init;
+  if (!TERMINATE_ON_ALL_ARRIVED) {
+    EXPLORED[H_init->Q] = H_init;
+  } else {
+    EXPLORED_ARRIVED[ArrivedKey{H_init->Q, H_init->arrived_goal}] = H_init;
+  }
   GC_HNodes.push_back(H_init);
 
   HNode *H_goal = nullptr;
@@ -169,7 +207,11 @@ Solution LaCAM::solve()
     }
 
     // check goal condition
-    if (is_same_config(H->Q, ins->goals)) {
+    const bool is_goal =
+        (!TERMINATE_ON_ALL_ARRIVED)
+            ? is_same_config(H->Q, ins->goals)
+            : (H->arrived_goal_cnt == static_cast<int>(ins->N));
+    if (is_goal) {
       if (H_goal == nullptr) {
         H_goal = H;
         solver_info(2, "found solution, g=", H->g);
@@ -216,10 +258,50 @@ Solution LaCAM::solve()
     // }
 
     // check explored list
-    auto iter = EXPLORED.find(Q_to);
-    if (iter != EXPLORED.end()) {
-      // known configuration
-      auto H_known = iter->second;
+    if (!TERMINATE_ON_ALL_ARRIVED) {
+      auto iter = EXPLORED.find(Q_to);
+      if (iter != EXPLORED.end()) {
+        // known configuration
+        auto H_known = iter->second;
+        // depth limit check before creating successor (solution size = depth+1)
+        if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+          reached_horizon = true;
+          break; // stop search at horizon
+        }
+        auto H_new = new HNode(Q_to, D, H);
+        // limit depth by STEP_LIMIT (solution size = depth+1)
+        if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
+          reached_horizon = true;
+          GC_HNodes.push_back(H_new); // keep node for partial reconstruction
+          break; // stop search at horizon once boundary node is generated
+        }
+        if (H_known->g < H_new->g) {
+          OPEN.push_front(H_known);
+          delete H_new;
+        } else {
+          // replace
+          OPEN.push_front(H_new);
+          EXPLORED[H_new->Q] = H_new;
+          GC_HNodes.push_back(H_new);
+        }
+      } else {
+        // new one -> insert
+        // depth limit check before creating successor
+        if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+          reached_horizon = true;
+          break; // stop search at horizon
+        }
+        auto H_new = new HNode(Q_to, D, H);
+        if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
+          reached_horizon = true;
+          GC_HNodes.push_back(H_new); // keep boundary node for partial reconstruction
+          break; // stop search at horizon once boundary node is generated
+        }
+        OPEN.push_front(H_new);
+        EXPLORED[H_new->Q] = H_new;
+        GC_HNodes.push_back(H_new);
+      }
+    } else {
       // depth limit check before creating successor (solution size = depth+1)
       if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
         reached_horizon = true;
@@ -229,34 +311,26 @@ Solution LaCAM::solve()
       // limit depth by STEP_LIMIT (solution size = depth+1)
       if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
         reached_horizon = true;
-        GC_HNodes.push_back(H_new);  // keep node for partial solution reconstruction
+        GC_HNodes.push_back(H_new); // keep boundary node for partial reconstruction
         break; // stop search at horizon once boundary node is generated
       }
-      if (H_known->g < H_new->g) {
-        OPEN.push_front(H_known);
-        delete H_new;
+      ArrivedKey key{H_new->Q, H_new->arrived_goal};
+      auto iter = EXPLORED_ARRIVED.find(key);
+      if (iter != EXPLORED_ARRIVED.end()) {
+        auto H_known = iter->second;
+        if (H_known->g < H_new->g) {
+          OPEN.push_front(H_known);
+          delete H_new;
+        } else {
+          OPEN.push_front(H_new);
+          iter->second = H_new; // replace value; key is equivalent
+          GC_HNodes.push_back(H_new);
+        }
       } else {
-        // replace
         OPEN.push_front(H_new);
-        EXPLORED[H_new->Q] = H_new;
+        EXPLORED_ARRIVED.emplace(std::move(key), H_new);
         GC_HNodes.push_back(H_new);
       }
-    } else {
-      // new one -> insert
-      // depth limit check before creating successor
-      if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
-        reached_horizon = true;
-        break; // stop search at horizon
-      }
-      auto H_new = new HNode(Q_to, D, H);
-      if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
-        reached_horizon = true;
-        GC_HNodes.push_back(H_new);  // keep boundary node for partial solution reconstruction
-        break; // stop search at horizon once boundary node is generated
-      }
-      OPEN.push_front(H_new);
-      EXPLORED[H_new->Q] = H_new;
-      GC_HNodes.push_back(H_new);
     }
   }
 

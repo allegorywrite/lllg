@@ -43,6 +43,9 @@ struct LNS {
   // Hyperparametes
   static bool ON;
   static int MAX_LOOP_CNT;
+  // -1 keeps classic goal-absorbing collision model; >=0 enables finite-horizon
+  // refinement over timesteps [0..HORIZON].
+  static int HORIZON;
 
   LNS(const Instance *_ins, DistTable *_D, Solution &_solution,
       const Deadline *_deadline, const int seed = 0, const int _verbose = 0);

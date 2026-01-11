@@ -1,11 +1,13 @@
 #include "../include/collision_table.hpp"
 
-CollisionTable::CollisionTable(const Instance *ins, bool _no_use_collision_cnt)
+CollisionTable::CollisionTable(const Instance *ins, bool _no_use_collision_cnt,
+                               bool _no_use_goal_occupation)
     : body(ins->G->size()),
       body_last(ins->G->size()),
       collision_cnt(0),
       N(ins->N),
-      no_use_collision_cnt(_no_use_collision_cnt)
+      no_use_collision_cnt(_no_use_collision_cnt),
+      no_use_goal_occupation(_no_use_goal_occupation)
 {
 }
 
@@ -37,10 +39,12 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
     }
   }
   
-  // goal collision
-  for (auto last_timestep : body_last[v_to->id]) {
-    if (t_to > last_timestep) {
-      ++collision;
+  if (!no_use_goal_occupation) {
+    // goal collision (agents occupy their last vertex forever after arrival)
+    for (auto last_timestep : body_last[v_to->id]) {
+      if (t_to > last_timestep) {
+        ++collision;
+      }
     }
   }
   
@@ -64,12 +68,14 @@ void CollisionTable::enrollPath(const int i, Path &path)
     body[v->id][t].push_back(i);
   }
 
-  // goal
-  body_last[path.back()->id].push_back(T_i);
-  if (!no_use_collision_cnt) {
-    auto &&entry = body[path.back()->id];
-    for (auto t = T_i + 1; t < entry.size(); ++t) {
-      collision_cnt += entry[t].size();
+  if (!no_use_goal_occupation) {
+    // goal (agents occupy their last vertex forever after arrival)
+    body_last[path.back()->id].push_back(T_i);
+    if (!no_use_collision_cnt) {
+      auto &&entry = body[path.back()->id];
+      for (auto t = T_i + 1; t < entry.size(); ++t) {
+        collision_cnt += entry[t].size();
+      }
     }
   }
 }
@@ -107,24 +113,26 @@ void CollisionTable::clearPath(const int i, Path &path)
     }
   }
   
-  // goal
-  if (path.back() != nullptr) {
-    auto &&entry_body_last = body_last[path.back()->id];
-    for (auto itr = entry_body_last.begin(); itr != entry_body_last.end();) {
-      if (*itr == T_i) {
-        entry_body_last.erase(itr);
-        break;
-      } else {
-        ++itr;
+  if (!no_use_goal_occupation) {
+    // goal (agents occupy their last vertex forever after arrival)
+    if (path.back() != nullptr) {
+      auto &&entry_body_last = body_last[path.back()->id];
+      for (auto itr = entry_body_last.begin(); itr != entry_body_last.end();) {
+        if (*itr == T_i) {
+          entry_body_last.erase(itr);
+          break;
+        } else {
+          ++itr;
+        }
       }
     }
-  }
-  
-  if (!no_use_collision_cnt) {
-    if (path.back() != nullptr) {
-      auto &&entry_body = body[path.back()->id];
-      for (auto t = T_i + 1; t < (int)entry_body.size(); ++t) {
-        collision_cnt -= entry_body[t].size();
+
+    if (!no_use_collision_cnt) {
+      if (path.back() != nullptr) {
+        auto &&entry_body = body[path.back()->id];
+        for (auto t = T_i + 1; t < (int)entry_body.size(); ++t) {
+          collision_cnt -= entry_body[t].size();
+        }
       }
     }
   }

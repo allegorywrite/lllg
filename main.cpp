@@ -32,6 +32,10 @@ int main(int argc, char *argv[])
       .help("limit LaCAM high-level depth (solution steps); -1 for unlimited")
       .scan<'d', int>()
       .default_value(-1);
+  program.add_argument("--terminate_on_all_arrived")
+      .help("terminate when every agent has reached its goal at least once (not necessarily simultaneously)")
+      .default_value(false)
+      .implicit_value(true);
   // Lifelong control
   program.add_argument("-S", "--steps")
       .help("number of execution steps (lifelong mode)")
@@ -85,6 +89,10 @@ int main(int argc, char *argv[])
   program.add_argument("--gg").default_value(false).implicit_value(true);
 
   program.add_argument("--lns").default_value(false).implicit_value(true);
+  program.add_argument("--lns_horizon")
+      .help("LNS horizon; -1 keeps classic goal-absorbing paths, >=0 plans 0..H steps (fixed horizon) for refinement")
+      .scan<'d', int>()
+      .default_value(-1);
   program.add_argument("--plns_num_refiners").scan<'d', int>().default_value(8);
 
   // deterministic
@@ -147,9 +155,11 @@ int main(int argc, char *argv[])
   PIBT::SWITCH_ORDER = program.get<int>("pibt_sort");
   // LaCAM horizon
   LaCAM::STEP_LIMIT = program.get<int>("lacam_horizon");
+  LaCAM::TERMINATE_ON_ALL_ARRIVED = program.get<bool>("terminate_on_all_arrived");
 
   // lns, plns
   LNS::ON = program.get<bool>("lns");
+  LNS::HORIZON = program.get<int>("lns_horizon");
   PLNS::NUM_REFINERS = program.get<int>("plns_num_refiners");
 
   // deterministic

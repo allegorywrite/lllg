@@ -14,8 +14,10 @@ struct CollisionTable {
   int collision_cnt;
   const int N;
   const bool no_use_collision_cnt;
+  const bool no_use_goal_occupation;
 
-  CollisionTable(const Instance *ins, bool _no_use_collision_cnt = false);
+  CollisionTable(const Instance *ins, bool _no_use_collision_cnt = false,
+                 bool _no_use_goal_occupation = false);
   ~CollisionTable();
 
   int getCollisionCost(const Vertex *v_from, const Vertex *v_to,
