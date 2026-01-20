@@ -30,6 +30,9 @@ def create_command(properties, output_file=None):
     if 'v' in properties:
         cmd.extend(["-v", str(properties['v'])])
         processed_keys.add('v')
+    if 'S' in properties:
+        cmd.extend(["-S", str(properties['S'])])
+        processed_keys.add('S')
 
     # その他のプロパティを汎用的に処理
     for key, value in properties.items():
@@ -116,6 +119,25 @@ def parse_result(result_text):
             makespan_match = re.search(r"makespan: (\d+)", line)
             if makespan_match:
                 data["makespan"] = makespan_match.group(1)
+        
+        # Lifelong mode の結果解析
+        elif "Lifelong summary:" in line:
+            total_tasks_match = re.search(r"total_completed_tasks=(\d+)", line)
+            if total_tasks_match:
+                data["total_completed_tasks"] = total_tasks_match.group(1)
+            
+            comp_time_ms_match = re.search(r"comp_time_ms=([\d\.]+)", line)
+            if comp_time_ms_match:
+                data["comp_time_ms"] = comp_time_ms_match.group(1)
+                data["runtime"] = comp_time_ms_match.group(1) 
+                
+            throughput_tasks_match = re.search(r"throughput_tasks/s=([\d\.]+)", line)
+            if throughput_tasks_match:
+                data["throughput_tasks"] = throughput_tasks_match.group(1)
+
+            throughput_makespan_match = re.search(r"throughput_makespan/s=([\d\.]+)", line)
+            if throughput_makespan_match:
+                data["throughput_makespan"] = throughput_makespan_match.group(1)
         
         # 通常のkey=value形式も処理
         elif '=' in line and not line.startswith('#'):

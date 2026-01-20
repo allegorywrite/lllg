@@ -2,8 +2,10 @@
 #include <planner.hpp>
 #include <post_processing.hpp>
 #include <lifelong_runner.hpp>
+#include <algorithm>
 #include <chrono>
 #include <random>
+#include <unordered_set>
 
 int main(int argc, char *argv[])
 {
@@ -34,7 +36,7 @@ int main(int argc, char *argv[])
       .default_value(-1);
   program.add_argument("--relax_goal")
       .help("relax goal condition: each agent must visit its goal at least once (not necessarily simultaneously)")
-      .default_value(false)
+      .default_value(true)
       .implicit_value(true);
   // Lifelong control
   program.add_argument("-S", "--steps")
@@ -43,6 +45,10 @@ int main(int argc, char *argv[])
       .default_value(-1);
   program.add_argument("--lifelong")
       .help("enable Lifelong LaCAM (replan each step and execute one step)")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lifelong_random_goals")
+      .help("in lifelong mode, ignore scenario goals/predefined-goals and assign random goals")
       .default_value(false)
       .implicit_value(true);
   program.add_argument("-o", "--output")
@@ -56,7 +62,7 @@ int main(int argc, char *argv[])
       .implicit_value(true);
   program.add_argument("--lifelong_seed_mode")
       .help("initialization source for Lifelong LaCAM local guide: plan, local_guide, none")
-      .default_value(std::string("local_guide"));
+      .default_value(std::string("plan"));
 
   // solver parameters
   program.add_argument("--no_pibt_swap")
@@ -71,7 +77,7 @@ int main(int argc, char *argv[])
   program.add_argument("--pibt_sort")
       .help("PIBT tie-break mode: 0=legacy(random), 1=prefer-free, 2=hindrance, 3=random+hindrance")
       .scan<'d', int>()
-      .default_value(0);
+      .default_value(2);
 
   program.add_argument("--lg").default_value(false).implicit_value(true);
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
@@ -124,6 +130,8 @@ int main(int argc, char *argv[])
   const auto output_name = program.get<std::string>("output");
   const auto log_short = program.get<bool>("log_short");
   const auto N = program.get<int>("num");
+  const auto lifelong = program.get<bool>("lifelong");
+  const auto lifelong_random_goals = program.get<bool>("lifelong_random_goals");
   const auto seed_mode_str = program.get<std::string>("lifelong_seed_mode");
   LifelongSeedMode lifelong_seed_mode = LifelongSeedMode::PrevLocalGuide;
   if (seed_mode_str == "plan") {
@@ -136,8 +144,44 @@ int main(int argc, char *argv[])
     std::cerr << "Unknown --lifelong_seed_mode '" << seed_mode_str
               << "'. Falling back to 'plan'." << std::endl;
   }
-  const auto ins = scen_name.size() > 0 ? Instance(scen_name, map_name, N)
-                                        : Instance(map_name, N, seed);
+
+  Instance ins = scen_name.size() > 0 ? Instance(scen_name, map_name, N)
+                                      : Instance(map_name, N, seed);
+  if (lifelong_random_goals && lifelong && scen_name.size() > 0) {
+    // RHCR-like benchmarking: use scenario starts but randomize goals, and ignore additional predefined goals.
+    std::mt19937 rng(seed + 1000);
+
+    std::vector<Vertex*> vertices = ins.G->V;
+    std::shuffle(vertices.begin(), vertices.end(), rng);
+
+    Config randomized_goals;
+    randomized_goals.reserve(ins.N);
+
+    std::unordered_set<Vertex*> used;
+    used.reserve(ins.N * 2);
+
+    size_t cursor = 0;
+    for (size_t agent_id = 0; agent_id < ins.N; ++agent_id) {
+      while (cursor < vertices.size() &&
+             (vertices[cursor] == ins.starts[agent_id] ||
+              used.find(vertices[cursor]) != used.end())) {
+        ++cursor;
+      }
+      if (cursor >= vertices.size()) {
+        std::cerr << "Failed to assign random initial goals: not enough free vertices." << std::endl;
+        return 1;
+      }
+      randomized_goals.push_back(vertices[cursor]);
+      used.insert(vertices[cursor]);
+      ++cursor;
+    }
+
+    ins.goals = randomized_goals;
+    ins.agent_predefined_goals.assign(ins.N, {});
+  } else if (lifelong_random_goals && !lifelong) {
+    std::cerr << "Warning: --lifelong_random_goals is set but --lifelong is not enabled; ignoring."
+              << std::endl;
+  }
   if (!ins.is_valid(1)) return 1;
 
   // set hyper parameters
@@ -206,7 +250,6 @@ int main(int argc, char *argv[])
 
   // solve
 //   const auto use_sipp = program.get<bool>("use_sipp");
-  const auto lifelong = program.get<bool>("lifelong");
   const auto steps_limit = program.get<int>("steps");
 
   if (!lifelong) {

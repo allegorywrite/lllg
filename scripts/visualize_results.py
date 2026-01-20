@@ -77,7 +77,10 @@ def get_axis_label(param_name):
         'lg_collision_cost': 'LG Collision Cost',
         'lg_collision_cost_order': 'LG Collision Cost Order',
         'lg_num_refine': 'LG Number of Refinements',
-        'N': 'Number of Agents'
+        'N': 'Number of Agents',
+        'throughput_tasks': 'Throughput (Tasks/s)',
+        'throughput_makespan': 'Throughput (Makespan/s)',
+        'total_completed_tasks': 'Total Completed Tasks'
     }
     return label_map.get(param_name, param_name)
 
@@ -99,7 +102,9 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
             if isinstance(group_val, str) and f'{line_property}=' in group_val:
                 try:
                     # 正規表現でline_propertyの値を抽出
-                    match = re.search(f'{line_property}=([^_]+)', group_val)
+                    # 正規表現でline_propertyの値を抽出
+                    # 値にアンダースコアが含まれる場合（local_guideなど）や、後ろに別のパラメータが続く場合を考慮
+                    match = re.search(f'{line_property}=(.+?)(?:_[a-zA-Z0-9_]+=|$)', group_val)
                     if match:
                         line_value = match.group(1)
                         try:
@@ -110,7 +115,8 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
                             if line_value.lower() in ['true', 'false']:
                                 line_value_numeric = 1.0 if line_value.lower() == 'true' else 0.0
                             else:
-                                continue
+                                # 文字列の場合 (例: local_guide)
+                                line_value_numeric = line_value
                         
                         # x軸とy軸の平均値を計算
                         mean_x = subset[x_col].mean()
@@ -134,9 +140,15 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
                             
                             # line_propertyの値でグループ分け
                             line_groups[line_value_numeric].append((other_properties, mean_x, mean_y, group_val))
-                except Exception:
+                except Exception as e:
+                    print(f"Error parsing group_val: {group_val}, error: {e}")
                     continue
         
+        print(f"Debug: line_property={line_property}")
+        print(f"Debug: Found {len(line_groups)} line groups: {list(line_groups.keys())}")
+        for l_val, items in line_groups.items():
+            print(f"  Line val {l_val}: {len(items)} points")
+
         # 各line_propertyの値について、他のプロパティでソートして線を引く
         # color_indexに基づいてbase_colorsから色を選択
         base_colors = ['red', 'blue', 'green', 'orange', 'purple', 'hotpink', 'gray', 'olive', 'cyan']
@@ -203,7 +215,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
 
             # legendがnullの場合は数字のみ表示
             if custom_legend is None:
-                label_text = str(label_value) + " agents"
+                label_text = str(label_value) + " inheritance"
             else:
                 legend_property_name = custom_legend if custom_legend else line_property
                 label_text = f'{legend_property_name}={label_value}'
@@ -211,7 +223,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
             plt.plot(x_values, y_values, linestyle='-', color=color, alpha=0.8, linewidth=4, zorder=10, 
                     label=label_text)
             
-            plt.xticks(x_values)
+            # plt.xticks(x_values)
             # plt.yticks(y_values)
             
             # 平均値の点をマークで表示
@@ -426,7 +438,7 @@ def add_mean_line_to_scatter(df, grouping_column, x_col, y_col, line_property, i
                                zorder=15)
     
     # 凡例を更新
-    # plt.legend(loc='best')
+    plt.legend(loc='best')
 
 def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None):
     """バイオリンプロットを作成する"""
@@ -435,6 +447,23 @@ def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None
     violin_params = plot_settings.get('violin_params', {})
     y_axis_param = violin_params.get('y_axis', 'soc')
     orient = violin_params.get('orient', 'vertical')
+    
+    # y_colの決定ロジック
+    y_col = 'sum_of_costs' # デフォルト
+    if y_axis_param in df.columns:
+        y_col = y_axis_param
+    elif y_axis_param == 'benchmark_normalized':
+        y_col = 'benchmark_normalized'
+    elif y_axis_param == 'soc_normalized':
+        y_col = 'soc_normalized'
+    elif y_axis_param == 'runtime':
+        y_col = 'runtime' if 'runtime' in df.columns else 'comp_time_ms'
+    elif y_axis_param == 'comp_time_ms':
+        y_col = 'comp_time_ms'
+    elif y_axis_param == 'runtime_sec':
+        y_col = 'runtime_sec'
+    else:
+        y_col = 'soc_normalized' if 'soc_normalized' in df.columns else 'soc'
     
     # vary_property がコラボキーかどうかを判定
     is_collab_plot = 'collab_config_str' in df.columns and df['collab_key'].iloc[0] == vary_property if 'collab_key' in df.columns and not df.empty else False
@@ -455,7 +484,7 @@ def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None
                 if baseline_list and len(baseline_list) > 0:
                     baseline_df = pd.DataFrame(baseline_list)
                     # 数値型に変換
-                    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+                    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb', 'throughput_tasks', 'throughput_makespan', 'total_completed_tasks']:
                         if col in baseline_df.columns:
                             baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
                     
@@ -485,7 +514,7 @@ def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None
             # 旧形式（リスト）の場合
             baseline_df = pd.DataFrame(baseline_data)
             # 数値型に変換
-            for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+            for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb', 'throughput_tasks', 'throughput_makespan', 'total_completed_tasks']:
                 if col in baseline_df.columns:
                     baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
             
@@ -593,10 +622,10 @@ def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None
     
     # バイオリンプロットを描画
     if orient == 'horizontal':
-        ax = sns.violinplot(data=valid_data, x=y_axis_param, y=grouping_column, 
+        ax = sns.violinplot(data=valid_data, x=y_col, y=grouping_column, 
                            inner=None, palette=palette)
         # 箱ひげ図を重ね描き（外れ値を非表示）
-        sns.boxplot(data=valid_data, x=y_axis_param, y=grouping_column, 
+        sns.boxplot(data=valid_data, x=y_col, y=grouping_column, 
                    width=0.3, color='white', ax=ax, showfliers=False,
                    boxprops=dict(edgecolor='black'), whiskerprops=dict(color='black'),
                    capprops=dict(color='black'), medianprops=dict(color='black'))
@@ -609,10 +638,10 @@ def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None
         else:
             plt.ylabel(get_axis_label(vary_property), fontweight='bold', fontsize=22)
     else:  # vertical
-        ax = sns.violinplot(data=valid_data, x=grouping_column, y=y_axis_param, 
+        ax = sns.violinplot(data=valid_data, x=grouping_column, y=y_col, 
                            inner=None, palette=palette)
         # 箱ひげ図を重ね描き（外れ値を非表示）
-        sns.boxplot(data=valid_data, x=grouping_column, y=y_axis_param, 
+        sns.boxplot(data=valid_data, x=grouping_column, y=y_col, 
                    width=0.3, color='white', ax=ax, showfliers=False,
                    boxprops=dict(edgecolor='black'), whiskerprops=dict(color='black'),
                    capprops=dict(color='black'), medianprops=dict(color='black'))
@@ -732,10 +761,14 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
     # x軸の列を決定
     if x_axis_param and x_axis_param in df.columns:
         x_col = x_axis_param
+    elif x_axis_param == 'runtime_sec':
+        x_col = 'runtime_sec'
     else:
         x_col = 'runtime' if 'runtime' in df.columns else 'comp_time_ms'
     
-    if y_axis_param == 'benchmark_normalized':
+    if y_axis_param and y_axis_param in df.columns:
+        y_col = y_axis_param
+    elif y_axis_param == 'benchmark_normalized':
         y_col = 'benchmark_normalized'
     elif y_axis_param == 'soc_normalized':
         y_col = 'soc_normalized'
@@ -743,6 +776,8 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
         y_col = 'runtime' if 'runtime' in df.columns else 'comp_time_ms'
     elif y_axis_param == 'comp_time_ms':
         y_col = 'comp_time_ms'
+    elif y_axis_param == 'runtime_sec':
+        y_col = 'runtime_sec'
     else:
         y_col = 'soc_normalized' if 'soc_normalized' in df.columns else 'soc'
     
@@ -755,7 +790,7 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
                 if baseline_list and len(baseline_list) > 0:
                     baseline_df = pd.DataFrame(baseline_list)
                     # 数値型に変換
-                    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+                    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb', 'throughput_tasks', 'throughput_makespan', 'total_completed_tasks']:
                         if col in baseline_df.columns:
                             baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
                     
@@ -788,7 +823,7 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
             # 旧形式（リスト）の場合
             baseline_df = pd.DataFrame(baseline_data)
             # 数値型に変換
-            for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+            for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb', 'throughput_tasks', 'throughput_makespan', 'total_completed_tasks']:
                 if col in baseline_df.columns:
                     baseline_df[col] = pd.to_numeric(baseline_df[col], errors='coerce')
             
@@ -1013,10 +1048,23 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
             plt.ylabel("Runtime (ms)", fontweight='bold', fontsize=30)
         elif y_col == 'comp_time_ms':
             plt.ylabel("Computation Time (ms)", fontweight='bold', fontsize=30)
+        elif y_col == 'runtime_sec':
+            plt.ylabel("Runtime (sec)", fontweight='bold', fontsize=30)
+        elif y_col == 'throughput_tasks':
+            plt.ylabel("Throughput (Tasks/s)", fontweight='bold', fontsize=30)
+        elif y_col == 'throughput_makespan':
+            plt.ylabel("Throughput (Makespan/s)", fontweight='bold', fontsize=30)
+        elif y_col == 'total_completed_tasks':
+            plt.ylabel("Total Completed Tasks", fontweight='bold', fontsize=30)
         else:
             plt.ylabel("Total Cost (sum_of_costs)", fontweight='bold', fontsize=30)
     
-    plt.xlabel(x_label, fontweight='bold', fontsize=30)
+            plt.ylabel("Total Cost (sum_of_costs)", fontweight='bold', fontsize=30)
+    
+    if x_col == 'runtime_sec':
+         plt.xlabel("Runtime (sec)", fontweight='bold', fontsize=30)
+    else:
+         plt.xlabel(x_label, fontweight='bold', fontsize=30)
     
     # 軸の境界線を太くする
     for spine in ax.spines.values():
@@ -1061,7 +1109,7 @@ def _plot_single_scatter(df, output_dir, vary_property, baseline_data=None, plot
         x_margin = x_range * 0.05 if x_range > 0 else 1
         y_margin = y_range * 0.05 if y_range > 0 else 0.1
         
-        ax.set_xlim(x_min - x_margin, x_max + x_margin)
+        # ax.set_xlim(x_min - x_margin, x_max + x_margin)
         # ax.set_xlim(x_min - x_margin, x_max + x_margin)
         # ax.set_ylim(0.6,  1.5)
         # ax.set_ylim(0, y_max + y_margin)
@@ -1166,9 +1214,15 @@ def plot_results(results, output_dir, vary_property, plot_settings=None, baselin
     df = pd.DataFrame(results)
     
     # 数値型に変換
-    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb']:
+    for col in ['sum_of_costs', 'soc', 'comp_time_ms', 'runtime', 'soc_lb', 'throughput_tasks', 'throughput_makespan', 'total_completed_tasks']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # runtime_sec計算 (ms -> s)
+    if 'runtime' in df.columns:
+         df['runtime_sec'] = df['runtime'] / 1000.0
+    elif 'comp_time_ms' in df.columns:
+         df['runtime_sec'] = df['comp_time_ms'] / 1000.0
     
     # 正規化したSOCを計算（SOC/SOC_LB）
     if 'soc' in df.columns and 'soc_lb' in df.columns:
@@ -1227,7 +1281,7 @@ def plot_results(results, output_dir, vary_property, plot_settings=None, baselin
             df.dropna(subset=['benchmark_normalized'], inplace=True)
     
     # バイオリンプロットと散布図の両方を作成
-    plot_violin(df, output_dir, vary_property, plot_settings, baseline_data)
+    # plot_violin(df, output_dir, vary_property, plot_settings, baseline_data)
     plot_scatter(df, output_dir, vary_property, baseline_data, plot_settings)
 
 def find_latest_experiment_dir():
@@ -1286,11 +1340,38 @@ def main():
     # 各パラメータ/コラボレーションについてグラフを作成
     for plot_key, results_list in all_results.items():
         if results_list:
-            plot_output_dir = os.path.join(output_dir, plot_key) 
-            os.makedirs(plot_output_dir, exist_ok=True)
+            # マップごとにデータを分割
+            df_temp = pd.DataFrame(results_list)
+            # マップ情報の列名を確認 (通常は 'm' だが念のため)
+            map_col = 'm' if 'm' in df_temp.columns else None
             
-            print(f"\n{plot_key} のグラフを作成中...")
-            plot_results(results_list, plot_output_dir, plot_key, plot_settings, baseline_results)
+            if map_col:
+                # マップごとにループ
+                unique_maps = df_temp[map_col].unique()
+                for map_file in unique_maps:
+                    # マップ名（ファイル名）を取得してディレクトリ名に使用
+                    map_name = os.path.splitext(os.path.basename(str(map_file)))[0]
+                    map_specific_results = [r for r in results_list if r.get(map_col) == map_file]
+                    
+                    if not map_specific_results:
+                        continue
+                        
+                    plot_output_dir = os.path.join(output_dir, plot_key, map_name)
+                    os.makedirs(plot_output_dir, exist_ok=True)
+                    
+                    print(f"\n{plot_key} のグラフを作成中 (Map: {map_name})...")
+                    # ベースラインも同じマップのものだけフィルタリングすべきだが、
+                    # 現状ベースラインデータの構造上、マップ情報との紐付けが厳密でない場合もあるため、
+                    # 簡易的に全てのベースラインを渡すか、あるいはベースライン側も微修正が必要。
+                    # ここでは一旦すべてのベースラインを渡す（比較対象として全て表示するため）
+                    plot_results(map_specific_results, plot_output_dir, plot_key, plot_settings, baseline_results)
+            else:
+                # マップ情報がない場合は従来通りまとめてプロット
+                plot_output_dir = os.path.join(output_dir, plot_key, "all_maps")
+                os.makedirs(plot_output_dir, exist_ok=True)
+                
+                print(f"\n{plot_key} のグラフを作成中 (All Maps)...")
+                plot_results(results_list, plot_output_dir, plot_key, plot_settings, baseline_results)
     
     print(f"\n可視化が完了しました。結果は {output_dir} に保存されています。")
 

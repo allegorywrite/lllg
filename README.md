@@ -25,6 +25,12 @@ cmake -B build && make -C build -j4
 build/main -i assets/random-32-32-10-random-1.scen -m assets/random-32-32-10.map -N 400 -v 2 --lg --lg_window 8 --lifelong -S 10
 ```
 
+To ignore scenario goals and use random goals in lifelong mode (scenario starts are still used), add:
+
+```sh
+build/main ... --lifelong --lifelong_random_goals
+```
+
 The result will be saved in `build/result.txt`.
 
 You can find details of all parameters with:
