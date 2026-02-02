@@ -1,0 +1,42 @@
+# LG-LACAM random-10-10 experiment configuration
+# This configuration defines parameter combinations for random-10-10 map experiments
+
+# Basic fixed parameters
+i:
+  - assets/asset_for_benchmark/mapf-scen-random/scen-random/den312d-random-1.scen
+
+m:
+  - assets/asset_for_benchmark/mapf-map/den312d.map
+  
+N: 1000
+v: 3
+S: 100
+
+"&lifelong_seed_mode_lacam_horizon_collab": 
+  properties:
+    - lifelong_seed_mode
+    - lacam_horizon
+
+# LG parameters
+lg: true
+lifelong: true
+lg_window: 20
+lacam_horizon: [1, 3, 5, 7, 9]
+lifelong_seed_mode: ["plan", "local_guide"]
+
+time_limit_sec: 50
+
+# Plot settings
+plot_settings:
+  mode: violin
+  line: lifelong_seed_mode
+  hide_scatter: true
+  hide_data_label: true
+  violin_params:
+    y_axis: throughput_tasks
+    x_axis: lacam_horizon
+    title: title
+    x_label: x_label
+    x_type: int
+    y_label: y_label
+    orient: vertical

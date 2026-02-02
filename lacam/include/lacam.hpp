@@ -17,6 +17,11 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
+#include <memory>
+#include <queue>
+#include <set>
+#include <unordered_map>
 
 #include "dist_table.hpp"
 #include "global_guide.hpp"
@@ -38,12 +43,23 @@ struct LNode {
 
 using HNodePriority = std::tuple<int, int, float>;
 
+struct PathCost {
+  long long primary = 0;
+  long long secondary = 0;
+};
+
+struct HNode;
+struct CompareHNodePointers {  // for determinism
+  bool operator()(const HNode *lhs, const HNode *rhs) const;
+};
+
 // high-level search node
 struct HNode {
   const Config Q;
   HNode *parent;
-  const int depth;
-  int g;
+  int depth;
+  std::set<HNode *, CompareHNodePointers> neighbor;
+  PathCost g;
 
   std::vector<HNodePriority> priorities;
   std::vector<int> order;
@@ -62,6 +78,27 @@ struct HNode {
 };
 using HNodes = std::vector<HNode *>;
 
+struct ArrivedKey {
+  Config Q;
+  std::vector<uint8_t> arrived_goal;
+};
+struct ArrivedKeyHasher {
+  std::size_t operator()(const ArrivedKey &k) const
+  {
+    std::size_t h = static_cast<std::size_t>(ConfigHasher{}(k.Q));
+    for (auto b : k.arrived_goal) {
+      h ^= static_cast<std::size_t>(b) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    }
+    return h;
+  }
+};
+struct ArrivedKeyEq {
+  bool operator()(const ArrivedKey &a, const ArrivedKey &b) const
+  {
+    return is_same_config(a.Q, b.Q) && a.arrived_goal == b.arrived_goal;
+  }
+};
+
 struct LaCAM {
   const Instance *ins;
   DistTable *D;
@@ -72,9 +109,19 @@ struct LaCAM {
 
   // solver utils
   PIBT pibt;
+  std::vector<std::unique_ptr<PIBT>> extra_pibts;
+  std::vector<PIBT *> pibt_pool;
   GlobalGuide global_guide;
   LocalGuide local_guide;
   int loop_cnt;
+  // search state (initialized in solve)
+  std::deque<HNode *> OPEN;
+  std::unordered_map<Config, HNode *, ConfigHasher> EXPLORED;
+  std::unordered_map<ArrivedKey, HNode *, ArrivedKeyHasher, ArrivedKeyEq>
+      EXPLORED_ARRIVED;
+  HNodes GC_HNodes;
+  HNode *H_init = nullptr;
+  HNode *H_goal = nullptr;
   // store last partial solution (backtracked from deepest explored HNode when no goal found)
   Solution last_partial_solution;
   // whether STEP_LIMIT (horizon) was reached during the last solve
@@ -88,18 +135,53 @@ struct LaCAM {
   std::vector<std::vector<HNodePriority>> last_solution_priorities;
 
   // Hyperparameters
+  enum class CostMode {
+    // Legacy per-step objective used by LaCAM in this repo:
+    // sum_i [ moved_i OR not_at_goal_i ].
+    LegacyEdge = 0,
+    // Under RELAX_GOAL, counts how many agents have not yet visited their goal
+    // (arrived_goal[i]==0) at the *from* node, per timestep.
+    // This is equivalent to sum of first-goal-arrival times (up to an additive constant).
+    UnreachedCount = 1,
+    // Weighted sum: w_u * unreached_count(from) + w_m * move_count(from,to)
+    WeightedSumUnreachedMove = 2,
+    // Lexicographic minimization of (unreached_count(from), move_count(from,to)).
+    LexiUnreachedMove = 3,
+    // Count how many agents are NOT on their goal after the transition (to-state).
+    // This directly prefers putting more agents onto their current goals sooner.
+    NextGoalMissCount = 4,
+  };
+
   static bool ANYTIME;
+  static bool REWRITE;
+  static int PIBT_NUM;
+  static bool MC_USE_HEURISTIC;
   // Maximum allowed high-level depth (solution length). -1 for unlimited.
   static int STEP_LIMIT;
   // If true, terminate when every agent has reached its goal at least once
   // (not necessarily simultaneously).
   static bool RELAX_GOAL;
+  static CostMode COST_MODE;
+  static int COST_W_UNREACHED;
+  static int COST_W_MOVE;
+  // If true, compute the unreached term using the post-transition reached state.
+  // This makes reaching a goal "count immediately" in the weighted_sum objective.
+  static bool UNREACHED_USE_AFTER;
 
   LaCAM(const Instance *_ins, DistTable *_D, int _verbose = 0,
         const Deadline *_deadline = nullptr, int _seed = 0);
   ~LaCAM();
   Solution solve();
   bool set_new_config(HNode *S, LNode *M, Config &Q_to);
+  int get_edge_cost(const Config &from, const Config &to) const;
+  int get_move_cost(const Config &from, const Config &to) const;
+  int get_unreached_count(const HNode *from) const;
+  int get_unreached_count_after(const HNode *from, const Config &to) const;
+  int get_next_goal_miss_count(const Config &to) const;
+  PathCost get_transition_cost(const HNode *from, const Config &to) const;
+  PathCost get_transition_cost(const HNode *from, const HNode *to) const;
+  void rewrite(HNode *H_from, HNode *H_to);
+  void apply_new_solution(const Solution &plan);
   const Solution& get_last_partial_solution() const { return last_partial_solution; }
   bool was_horizon_reached() const { return reached_horizon; }
   void set_initial_priorities(const std::vector<HNodePriority>& priorities);

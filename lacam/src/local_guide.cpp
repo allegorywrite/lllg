@@ -144,14 +144,14 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   };
   thread_local std::vector<std::pair<int, int> > CLOSED_idx;  // Changed to thread-local variable
 
-  auto update_guide_path = [&](const int i) {
-    // Use space-time A*
-    // special case
-    if (Q_from[i] == ins->goals[i]) {
-      for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
-      cached_collision_costs[i] = 0.0f; // Collision cost is 0 when at goal
-      return;
-    }
+	  auto update_guide_path = [&](const int i) {
+	    // Use space-time A*
+	    // special case
+	    if (Q_from[i] == ins->goals[i]) {
+	      for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
+	      cached_collision_costs[i] = 0.0f; // Collision cost is 0 when at goal
+	      return;
+	    }
 
     // initialize search utils
     std::priority_queue<WSPPNode*, WSPPNodes, decltype(cmp)> OPEN(cmp);
@@ -207,13 +207,13 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       }
     }
     
-    if (guide_paths[i][0] == nullptr) {
-      std::cout << "Not Supposed Error" << std::endl;
-      for (auto t = 0; t < WINDOW; ++t) {
-        guide_paths[i][t] = Q_from[i];
-      }
-      cached_collision_costs[i] = 0.0f;
-    }
+	    if (guide_paths[i][0] == nullptr) {
+	      std::cout << "Not Supposed Error" << std::endl;
+	      for (auto t = 0; t < WINDOW; ++t) {
+	        guide_paths[i][t] = Q_from[i];
+	      }
+	      cached_collision_costs[i] = 0.0f;
+	    }
     
     // clear CLOSED
     for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
@@ -230,14 +230,14 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   //     CT.enrollPath(i, guide_paths[i]);
   //   }
   // }
-  for (auto i = 0; i < N; ++i) {
-    if (guide_paths[i].size() <= 1) continue;
-    if (Q_from[i] != guide_paths[i][1]) continue;
-    for (auto t = 0; t < WINDOW - 1; ++t) {
-      guide_paths[i][t] = guide_paths[i][t + 1];
-    }
-    CT.enrollPath(i, guide_paths[i]);
-  }
+	  for (auto i = 0; i < N; ++i) {
+	    if (guide_paths[i].size() <= 1) continue;
+	    if (Q_from[i] != guide_paths[i][1]) continue;
+	    for (auto t = 0; t < WINDOW - 1; ++t) {
+	      guide_paths[i][t] = guide_paths[i][t + 1];
+	    }
+	    CT.enrollPath(i, guide_paths[i]);
+	  }
 
   // Reference trajectory improvement
   int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;

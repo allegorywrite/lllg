@@ -143,6 +143,7 @@ void make_log(const Instance &ins, const Solution &solution,
               const bool log_short, const LocalGuide* local_guide,
               const double comp_time_init_ms, const Solution& solution_init,
               const std::vector<Config>* lifelong_goals_history,
+              const LifelongLbSpMetrics* lifelong_lb_sp_metrics,
               const int goal_change_count,
               const std::vector<std::vector<Path>>* local_guidance_history,
               const bool* override_solved)
@@ -193,6 +194,16 @@ void make_log(const Instance &ins, const Solution &solution,
       }
     }
     log << "total_completed_tasks=" << total_completed_tasks_modified << "\n";
+  }
+  if (lifelong_lb_sp_metrics != nullptr) {
+    log << "lb_sp_dist_sum=" << lifelong_lb_sp_metrics->dist_sum << "\n";
+    log << "lb_sp_dist_avg_agent=" << lifelong_lb_sp_metrics->dist_avg_agent
+        << "\n";
+    log << "lb_sp_dist_max_agent=" << lifelong_lb_sp_metrics->dist_max_agent
+        << "\n";
+    log << "lb_sp_task_count=" << lifelong_lb_sp_metrics->task_count << "\n";
+    log << "lb_sp_unreachable_task_count="
+        << lifelong_lb_sp_metrics->unreachable_task_count << "\n";
   }
   if (log_short) return;
   log << "starts=";

@@ -4,6 +4,7 @@
 #include "../include/post_processing.hpp"
 #include "../include/metrics.hpp"
 #include "../include/graph.hpp"
+#include <algorithm>
 #include <chrono>
 #include <random>
 #include <string>
@@ -18,7 +19,8 @@ int run_lifelong(const Instance& base_ins,
                  const std::string& map_name,
                  bool log_short,
                  LifelongSeedMode seed_mode,
-                 bool log_all_step)
+                 bool log_all_step,
+                 bool log_local_guidance)
 {
   // Prepare state
   auto G = base_ins.G;
@@ -63,6 +65,25 @@ int run_lifelong(const Instance& base_ins,
   // Initialize DistTable once
   auto D = DistTable(base_ins);
 
+  // DistTable-based lower-bound proxy:
+  // Sum shortest-path distances (ignoring other agents) at each goal assignment time.
+  // - initial assignment: start -> initial goal
+  // - reassignment: (old goal position) -> new goal
+  long long lb_sp_dist_sum = 0;
+  std::vector<long long> lb_sp_dist_per_agent(base_ins.N, 0);
+  long long lb_sp_task_count = 0;
+  long long lb_sp_unreachable_task_count = 0;
+  for (int i = 0; i < (int)base_ins.N; ++i) {
+    const int d0 = D.get(i, current_config[i]);
+    if (d0 < D.K) {
+      lb_sp_dist_sum += d0;
+      lb_sp_dist_per_agent[i] += d0;
+      ++lb_sp_task_count;
+    } else {
+      ++lb_sp_unreachable_task_count;
+    }
+  }
+
   // Outer loop over execution steps
   const int max_steps = steps_limit;
   int steps_done = 0;
@@ -82,6 +103,15 @@ int run_lifelong(const Instance& base_ins,
           goal_updated[i] = true;
           // Update DistTable for this agent
           D.update(i, ng);
+          // Lower-bound proxy contribution for this newly assigned task.
+          const int d = D.get(i, current_config[i]);
+          if (d < D.K) {
+            lb_sp_dist_sum += d;
+            lb_sp_dist_per_agent[i] += d;
+            ++lb_sp_task_count;
+          } else {
+            ++lb_sp_unreachable_task_count;
+          }
         }
       }
     }
@@ -174,8 +204,11 @@ int run_lifelong(const Instance& base_ins,
       const auto& solution_to_log = cycle_solved ? sol : lacam->get_last_partial_solution();
       bool solved_override = cycle_solved;
       make_log(cyc_ins, solution_to_log, per_cycle_name, cyc_comp_time_ms, map_name, seed,
-               /*log_short=*/false, /*local_guide=*/(lacam ? &lacam->local_guide : nullptr), /*comp_time_init_ms=*/-1.0,
-               /*solution_init=*/{}, /*lifelong_goals_history=*/nullptr, /*goal_change_count=*/0,
+               /*log_short=*/false,
+               /*local_guide=*/(log_local_guidance && lacam ? &lacam->local_guide : nullptr),
+               /*comp_time_init_ms=*/-1.0,
+               /*solution_init=*/{}, /*lifelong_goals_history=*/nullptr,
+               /*lifelong_lb_sp_metrics=*/nullptr, /*goal_change_count=*/0,
                /*local_guidance_history=*/nullptr, /*override_solved=*/&solved_override);
     }
 
@@ -199,7 +232,7 @@ int run_lifelong(const Instance& base_ins,
       try {
         if (lacam->local_guide.get_history_size() > 0) {
           const auto& step0_paths = lacam->local_guide.get_paths_at_step(0);
-          local_guidance_history.push_back(step0_paths);
+          if (log_local_guidance) local_guidance_history.push_back(step0_paths);
           prev_local_guide_paths = step0_paths;
           prev_local_guide_paths_valid = true;
           updated_prev_local_guide = true;
@@ -240,8 +273,18 @@ int run_lifelong(const Instance& base_ins,
 
   // Logging (skip feasibility since goals changed over time)
   // print_stats(verbose, nullptr, base_ins, executed_solution, total_comp_time_ms);
+  const long long lb_sp_dist_max_agent =
+      lb_sp_dist_per_agent.empty()
+          ? 0
+          : *std::max_element(lb_sp_dist_per_agent.begin(), lb_sp_dist_per_agent.end());
+  const double lb_sp_dist_avg_agent =
+      base_ins.N > 0 ? (static_cast<double>(lb_sp_dist_sum) / static_cast<double>(base_ins.N)) : 0.0;
+  const LifelongLbSpMetrics lifelong_lb_sp_metrics{
+      lb_sp_dist_sum, lb_sp_dist_avg_agent, lb_sp_dist_max_agent, lb_sp_task_count,
+      lb_sp_unreachable_task_count};
   make_log(base_ins, executed_solution, output_name, total_comp_time_ms, map_name, seed,
-           log_short, nullptr, -1.0, {}, &goals_history, 0, &local_guidance_history);
+           log_short, nullptr, -1.0, {}, &goals_history, &lifelong_lb_sp_metrics, 0,
+           log_local_guidance ? &local_guidance_history : nullptr);
 
   // Compute and print Lifelong summary metrics
   // total_completed_tasks: count goal reassignment events across agents over time
@@ -263,6 +306,11 @@ int run_lifelong(const Instance& base_ins,
   info(1, verbose,
        "Lifelong summary:\t",
        "total_completed_tasks=", total_completed_tasks,
+       "\tlb_sp_dist_sum=", lb_sp_dist_sum,
+       "\tlb_sp_dist_avg_agent=", lb_sp_dist_avg_agent,
+       "\tlb_sp_dist_max_agent=", lb_sp_dist_max_agent,
+       "\tlb_sp_task_count=", lb_sp_task_count,
+       "\tlb_sp_unreachable_task_count=", lb_sp_unreachable_task_count,
        "\tcomp_time_ms=", total_comp_time_ms,
        "\tthroughput_tasks/s=", throughput_tasks,
        "\tthroughput_makespan/s=", throughput_makespan);

@@ -9,6 +9,14 @@
 #include "metrics.hpp"
 #include "utils.hpp"
 
+struct LifelongLbSpMetrics {
+  long long dist_sum = 0;
+  double dist_avg_agent = 0.0;
+  long long dist_max_agent = 0;
+  long long task_count = 0;
+  long long unreachable_task_count = 0;
+};
+
 bool is_feasible_solution(const Instance &ins, const Solution &solution,
                           const int verbose = 0);
 // Relaxed goal condition: each agent must have visited its goal at least once
@@ -24,6 +32,7 @@ void make_log(const Instance &ins, const Solution &solution,
               const bool log_short, const LocalGuide* local_guide = nullptr,
               const double comp_time_init_ms = -1.0, const Solution& solution_init = {},
               const std::vector<Config>* lifelong_goals_history = nullptr,
+              const LifelongLbSpMetrics* lifelong_lb_sp_metrics = nullptr,
               const int goal_change_count = 0,
               const std::vector<std::vector<Path>>* local_guidance_history = nullptr,
               const bool* override_solved = nullptr);

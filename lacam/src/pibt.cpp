@@ -3,6 +3,8 @@
 bool PIBT::SWAP = true;
 bool PIBT::DETERMINISTIC = false;
 bool PIBT::NEXT_STEP_HINDRANCE = true;
+int PIBT::NUM_REGRET_SAMPLING = 0;
+float PIBT::NEW_REGRET_WEIGHT = 0.9f;
 int PIBT::SWITCH_ORDER = 0;
 
 PIBT::PIBT(const Instance *_ins, DistTable *_D, int seed)
@@ -17,6 +19,7 @@ PIBT::PIBT(const Instance *_ins, DistTable *_D, int seed)
       occupied_next(V_size, NO_AGENT),
       C_next(N),
       C_indices(N),
+      R(N),
       global_guide(nullptr),
       local_guide(nullptr)
 {
@@ -28,6 +31,7 @@ bool PIBT::set_new_config(const Config &Q_from, Config &Q_to,
                           const std::vector<int> &order)
 {
   bool success = true;
+  std::vector<int> free_agents;
   // setup cache & constraints check
   for (auto i = 0; i < N; ++i) {
     // set occupied now
@@ -47,15 +51,36 @@ bool PIBT::set_new_config(const Config &Q_from, Config &Q_to,
         break;
       }
       occupied_next[Q_to[i]->id] = i;
+    } else {
+      free_agents.push_back(i);
     }
+
+    // reset regret table (only indices that can be used)
+    const size_t Kp1 = Q_from[i]->neighbor.size() + 1;
+    for (size_t k = 0; k < Kp1 && k < R[i].size(); ++k) R[i][k] = 0.0f;
   }
 
   if (success) {
-    for (auto i : order) {
-      if (Q_to[i] == nullptr && !funcPIBT(i, Q_from, Q_to)) {
-        success = false;
-        break;
+    const int samples = std::max(0, NUM_REGRET_SAMPLING);
+    for (int s = 0; s < samples + 1; ++s) {
+      for (auto i : order) {
+        if (Q_to[i] == nullptr && !std::get<0>(funcPIBT(i, Q_from, Q_to))) {
+          success = false;
+          break;
+        }
       }
+
+      // Clear decisions for originally-free agents to resample.
+      if (s < samples) {
+        for (auto j : free_agents) {
+          if (Q_to[j] != nullptr) {
+            occupied_next[Q_to[j]->id] = NO_AGENT;
+            Q_to[j] = nullptr;
+          }
+        }
+      }
+
+      if (!success) break;
     }
   }
 
@@ -68,7 +93,7 @@ bool PIBT::set_new_config(const Config &Q_from, Config &Q_to,
   return success;
 }
 
-bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
+std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
 {
   // if (DETERMINISTIC) {
   //   std::cout << "funcPIBT called for agent " << i 
@@ -114,20 +139,21 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
 
     float tie_breaker = DETERMINISTIC ? 0.0f : rrd(MT);
     const int primary_cost = swap ? -D->get(i, u) : lg;
+    const float regret_est = (u_idx >= 0 && u_idx < static_cast<int>(R[i].size())) ? R[i][u_idx] : 0.0f;
 
     // Switchable tie-breaking (ported from pibt-tiebreaking).
     // 0: legacy (primary, random)
     // 1: prefer unoccupied (primary, inheri, random)
-    // 2: prefer low hindrance (primary, hindrance, random)
-    // 3: legacy + hindrance (primary, random, hindrance)
+    // 2: prefer low hindrance + regret (primary, hindrance, regret, random)
+    // 3: prefer regret + hindrance (primary, regret, hindrance, random)
     if (SWITCH_ORDER == 1) {
       return std::make_tuple(primary_cost, inheri, tie_breaker, 0.0f);
     }
     if (SWITCH_ORDER == 2) {
-      return std::make_tuple(primary_cost, next_step_hindrance, tie_breaker, inheri);
+      return std::make_tuple(primary_cost, next_step_hindrance, regret_est, tie_breaker);
     }
     if (SWITCH_ORDER == 3) {
-      return std::make_tuple(primary_cost, tie_breaker, next_step_hindrance, inheri);
+      return std::make_tuple(primary_cost, regret_est, next_step_hindrance, tie_breaker);
     }
     return std::make_tuple(primary_cost, tie_breaker, 0.0f, 0.0f);
   };
@@ -169,6 +195,13 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
       Q_to[swap_agent] = Q_from[i];
     }
   };
+
+  // regret baseline: best (minimum) distance-to-goal among all candidates
+  int dist_best = INT_MAX;
+  for (size_t kk = 0; kk < K; ++kk) {
+    dist_best = std::min(dist_best, D->get(i, C_next[i][kk]));
+  }
+  dist_best = std::min(dist_best, D->get(i, Q_from[i]));  // stay
 
   // main loop
   // if (DETERMINISTIC && i == 4) {  // Debug agent 5 (index 4)
@@ -212,13 +245,17 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
     Q_to[i] = u;
 
     // priority inheritance
-    if (j != NO_AGENT && u != Q_from[i] && Q_to[j] == nullptr &&
-        !funcPIBT(j, Q_from, Q_to)) {
-      // if (DETERMINISTIC) {
-      //   std::cout << "  Priority inheritance FAILED: agent " << i << " cannot push agent " << j 
-      //             << " from (" << Q_from[j]->x << "," << Q_from[j]->y << ")" << std::endl;
-      // }
-      continue;
+    int regret = 0;
+    if (j != NO_AGENT && u != Q_from[i] && Q_to[j] == nullptr) {
+      auto res = funcPIBT(j, Q_from, Q_to);
+      const bool validity = std::get<0>(res);
+      regret = std::get<1>(res);
+      if (u_idx >= 0 && u_idx < static_cast<int>(R[i].size())) {
+        R[i][u_idx] =
+            (1.0f - NEW_REGRET_WEIGHT) * R[i][u_idx] +
+            NEW_REGRET_WEIGHT * static_cast<float>(regret);
+      }
+      if (!validity) continue;
     }
     // if (j != NO_AGENT && u != Q_from[i] && Q_to[j] != nullptr) {
     //   if (DETERMINISTIC) {
@@ -235,13 +272,15 @@ bool PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
     //             << " (" << u->x << "," << u->y << ")"
     //             << " at priority k=" << k << std::endl;
     // }
-    return true;
+    const int regret_i = D->get(i, u) - dist_best;
+    return {true, regret + regret_i};
   }
 
   // failed to secure node
   occupied_next[Q_from[i]->id] = i;
   Q_to[i] = Q_from[i];
-  return false;
+  const int regret_i = D->get(i, Q_to[i]) - dist_best;
+  return {false, regret_i};
 }
 
 int PIBT::is_swap_required_and_possible(const int i, const Config &Q_from,

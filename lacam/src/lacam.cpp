@@ -1,15 +1,58 @@
 #include "../include/lacam.hpp"
 
+#include <algorithm>
+#include <climits>
+
 bool LaCAM::ANYTIME = false;
+bool LaCAM::REWRITE = false;
+int LaCAM::PIBT_NUM = 1;
+bool LaCAM::MC_USE_HEURISTIC = true;
 int LaCAM::STEP_LIMIT = -1;
 bool LaCAM::RELAX_GOAL = false;
+LaCAM::CostMode LaCAM::COST_MODE = LaCAM::CostMode::LegacyEdge;
+int LaCAM::COST_W_UNREACHED = 1;
+int LaCAM::COST_W_MOVE = 1;
+bool LaCAM::UNREACHED_USE_AFTER = false;
+
+static bool cost_less(const PathCost& a, const PathCost& b)
+{
+  if (LaCAM::COST_MODE == LaCAM::CostMode::LexiUnreachedMove) {
+    if (a.primary != b.primary) return a.primary < b.primary;
+    return a.secondary < b.secondary;
+  }
+  return a.primary < b.primary;
+}
+
+static bool cost_geq(const PathCost& a, const PathCost& b)
+{
+  if (LaCAM::COST_MODE == LaCAM::CostMode::LexiUnreachedMove) {
+    if (a.primary != b.primary) return a.primary > b.primary;
+    return a.secondary >= b.secondary;
+  }
+  return a.primary >= b.primary;
+}
+
+bool CompareHNodePointers::operator()(const HNode *l, const HNode *r) const
+{
+  if (l == r) return false;
+  const int N = static_cast<int>(l->Q.size());
+  for (int i = 0; i < N; ++i) {
+    if (l->Q[i] != r->Q[i]) return l->Q[i]->id < r->Q[i]->id;
+  }
+  // Disambiguate by arrived-goal state (needed under RELAX_GOAL).
+  return std::lexicographical_compare(l->arrived_goal.begin(),
+                                      l->arrived_goal.end(),
+                                      r->arrived_goal.begin(),
+                                      r->arrived_goal.end());
+}
 
 HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
              const std::vector<HNodePriority>* initial_priorities)
     : Q(_Q),
       parent(_parent),
       depth(parent == nullptr ? 0 : parent->depth + 1),
-      g(parent == nullptr ? 0 : parent->g),
+      neighbor(),
+      g(parent == nullptr ? PathCost{0, 0} : parent->g),
       priorities(Q.size()),
       order(Q.size(), 0),
       search_tree(),
@@ -19,13 +62,15 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
       arrived_goal_cnt(parent == nullptr ? 0 : parent->arrived_goal_cnt)
 {
   search_tree.push(new LNode());
-  const auto N = Q.size();
-
-  local_guide_paths.resize(N);
+  const int N = static_cast<int>(Q.size());
+  if (parent != nullptr) {
+    neighbor.insert(parent);
+    parent->neighbor.insert(this);
+  }
 
   const bool has_override =
       (parent == nullptr && initial_priorities != nullptr &&
-       initial_priorities->size() == N);
+       initial_priorities->size() == static_cast<size_t>(N));
 
   for (auto i = 0; i < N; ++i) {
     const auto dist_to_goal = D->get(i, Q[i]);
@@ -47,7 +92,34 @@ HNode::HNode(Config _Q, DistTable *D, HNode *_parent,
 
     // compute cost, sum-of-loss
     if (parent != nullptr) {
-      if (parent->Q[i] != Q[i] || dist_to_goal > 0) g += 1;
+      const bool moved = (parent->Q[i] != Q[i]);
+      const bool not_at_goal = (dist_to_goal > 0);
+      const bool unreached = (arrived_goal[i] == 0);
+      const bool unreached_after = unreached && not_at_goal;
+      switch (LaCAM::COST_MODE) {
+        case LaCAM::CostMode::LegacyEdge:
+          if (moved || not_at_goal) g.primary += 1;
+          break;
+        case LaCAM::CostMode::UnreachedCount:
+          // Count "still not yet visited goal" agents at the previous timestep.
+          if (unreached) g.primary += 1;
+          break;
+        case LaCAM::CostMode::WeightedSumUnreachedMove:
+          if (LaCAM::UNREACHED_USE_AFTER) {
+            if (unreached_after) g.primary += LaCAM::COST_W_UNREACHED;
+          } else {
+            if (unreached) g.primary += LaCAM::COST_W_UNREACHED;
+          }
+          if (moved) g.primary += LaCAM::COST_W_MOVE;
+          break;
+        case LaCAM::CostMode::LexiUnreachedMove:
+          if (unreached) g.primary += 1;
+          if (moved) g.secondary += 1;
+          break;
+        case LaCAM::CostMode::NextGoalMissCount:
+          if (not_at_goal) g.primary += 1;
+          break;
+      }
     }
 
     // update arrived-goal flags (monotone)
@@ -101,6 +173,8 @@ LaCAM::LaCAM(const Instance *_ins, DistTable *_D, int _verbose,
       MT(std::mt19937(seed)),
       verbose(_verbose),
       pibt(ins, D, seed),
+      extra_pibts(),
+      pibt_pool(),
       global_guide(ins, D, deadline, seed),
       local_guide(ins, D, seed, &global_guide),
       loop_cnt(0)
@@ -125,36 +199,28 @@ Solution LaCAM::solve()
 
   // construct global guidance
   global_guide.construct();
-  pibt.global_guide = &global_guide;
-  pibt.local_guide = &local_guide;
+  // setup PIBT pool (Monte-Carlo configuration generation)
+  extra_pibts.clear();
+  pibt_pool.clear();
+  pibt_pool.reserve(std::max(1, PIBT_NUM));
+  pibt_pool.push_back(&pibt);
+  for (int k = 1; k < std::max(1, PIBT_NUM); ++k) {
+    extra_pibts.emplace_back(std::make_unique<PIBT>(ins, D, seed + k));
+    pibt_pool.push_back(extra_pibts.back().get());
+  }
+  for (auto *p : pibt_pool) {
+    p->global_guide = &global_guide;
+    p->local_guide = &local_guide;
+  }
   if (GlobalGuide::ON) solver_info(2, "constructed global guide");
 
   // setup search
-  auto OPEN = std::deque<HNode *>();
-  auto EXPLORED = std::unordered_map<Config, HNode *, ConfigHasher>();
-  struct ArrivedKey {
-    Config Q;
-    std::vector<uint8_t> arrived_goal;
-  };
-  struct ArrivedKeyHasher {
-    std::size_t operator()(const ArrivedKey &k) const
-    {
-      std::size_t h = static_cast<std::size_t>(ConfigHasher{}(k.Q));
-      for (auto b : k.arrived_goal) {
-        h ^= static_cast<std::size_t>(b) + 0x9e3779b9 + (h << 6) + (h >> 2);
-      }
-      return h;
-    }
-  };
-  struct ArrivedKeyEq {
-    bool operator()(const ArrivedKey &a, const ArrivedKey &b) const
-    {
-      return is_same_config(a.Q, b.Q) && a.arrived_goal == b.arrived_goal;
-    }
-  };
-  auto EXPLORED_ARRIVED =
-      std::unordered_map<ArrivedKey, HNode *, ArrivedKeyHasher, ArrivedKeyEq>();
-  HNodes GC_HNodes;
+  OPEN.clear();
+  EXPLORED.clear();
+  EXPLORED_ARRIVED.clear();
+  GC_HNodes.clear();
+  H_init = nullptr;
+  H_goal = nullptr;
 
   // insert initial node
   const std::vector<HNodePriority>* root_priority_override = nullptr;
@@ -163,7 +229,7 @@ Solution LaCAM::solve()
     root_priority_override = &initial_root_priorities;
   }
   has_initial_root_priorities = false;
-  auto H_init = new HNode(ins->starts, D, nullptr, root_priority_override);
+  H_init = new HNode(ins->starts, D, nullptr, root_priority_override);
   last_root_priorities = H_init->priorities;
   OPEN.push_front(H_init);
   if (!RELAX_GOAL) {
@@ -172,8 +238,6 @@ Solution LaCAM::solve()
     EXPLORED_ARRIVED[ArrivedKey{H_init->Q, H_init->arrived_goal}] = H_init;
   }
   GC_HNodes.push_back(H_init);
-
-  HNode *H_goal = nullptr;
 
   // search loop
   solver_info(2, "search iteration begins");
@@ -198,10 +262,11 @@ Solution LaCAM::solve()
     //   std::cout << std::endl;
     // }
 
-    // check uppwer bounds
-    if (H_goal != nullptr && H->g >= H_goal->g) {
+    // check upper bounds
+    if (H_goal != nullptr && cost_geq(H->g, H_goal->g)) {
       OPEN.pop_front();
-      solver_info(3, "prune, g=", H->g, " >= ", H_goal->g);
+      solver_info(3, "prune, g primary=", H->g.primary, " secondary=", H->g.secondary,
+                  " >= goal primary=", H_goal->g.primary, " secondary=", H_goal->g.secondary);
       OPEN.push_front(H_init);
       continue;
     }
@@ -214,10 +279,12 @@ Solution LaCAM::solve()
     if (is_goal) {
       if (H_goal == nullptr) {
         H_goal = H;
-        solver_info(2, "found solution, g=", H->g);
+        solver_info(2, "found solution, g primary=", H->g.primary, " secondary=", H->g.secondary);
         if (!ANYTIME) break;
-      } else if (H->g < H_goal->g) {
-        solver_info(2, "update solution, g:", H_goal->g, " -> ", H->g);
+      } else if (cost_less(H->g, H_goal->g)) {
+        solver_info(2, "update solution, g:",
+                    H_goal->g.primary, ",", H_goal->g.secondary, " -> ",
+                    H->g.primary, ",", H->g.secondary);
         H_goal = H;
       }
     }
@@ -237,7 +304,7 @@ Solution LaCAM::solve()
     auto res = set_new_config(H, L, Q_to);
 
     // low level search
-    if (res && L->depth < H->Q.size()) {
+    if (res && L->depth < static_cast<int>(H->Q.size())) {
       const auto i = H->order[L->depth];
       auto &&C = H->Q[i]->actions;
       std::shuffle(C.begin(), C.end(), MT);  // randomize
@@ -258,81 +325,99 @@ Solution LaCAM::solve()
     // }
 
     // check explored list
-    if (!RELAX_GOAL) {
-      auto iter = EXPLORED.find(Q_to);
-      if (iter != EXPLORED.end()) {
-        // known configuration
-        auto H_known = iter->second;
-        // depth limit check before creating successor (solution size = depth+1)
-        if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
-          reached_horizon = true;
-          break; // stop search at horizon
-        }
-        auto H_new = new HNode(Q_to, D, H);
-        // limit depth by STEP_LIMIT (solution size = depth+1)
-        if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
-          reached_horizon = true;
-          GC_HNodes.push_back(H_new); // keep node for partial reconstruction
-          break; // stop search at horizon once boundary node is generated
-        }
-        if (H_known->g < H_new->g) {
-          OPEN.push_front(H_known);
-          delete H_new;
-        } else {
-          // replace
-          OPEN.push_front(H_new);
-          EXPLORED[H_new->Q] = H_new;
-          GC_HNodes.push_back(H_new);
-        }
-      } else {
-        // new one -> insert
-        // depth limit check before creating successor
-        if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
-          reached_horizon = true;
-          break; // stop search at horizon
-        }
-        auto H_new = new HNode(Q_to, D, H);
-        if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
-          reached_horizon = true;
-          GC_HNodes.push_back(H_new); // keep boundary node for partial reconstruction
-          break; // stop search at horizon once boundary node is generated
-        }
-        OPEN.push_front(H_new);
-        EXPLORED[H_new->Q] = H_new;
-        GC_HNodes.push_back(H_new);
-      }
-    } else {
-      // depth limit check before creating successor (solution size = depth+1)
-      if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
-        reached_horizon = true;
-        break; // stop search at horizon
-      }
-      auto H_new = new HNode(Q_to, D, H);
-      // limit depth by STEP_LIMIT (solution size = depth+1)
-      if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
-        reached_horizon = true;
-        GC_HNodes.push_back(H_new); // keep boundary node for partial reconstruction
-        break; // stop search at horizon once boundary node is generated
-      }
-      ArrivedKey key{H_new->Q, H_new->arrived_goal};
-      auto iter = EXPLORED_ARRIVED.find(key);
-      if (iter != EXPLORED_ARRIVED.end()) {
-        auto H_known = iter->second;
-        if (H_known->g < H_new->g) {
-          OPEN.push_front(H_known);
-          delete H_new;
-        } else {
-          OPEN.push_front(H_new);
-          iter->second = H_new; // replace value; key is equivalent
-          GC_HNodes.push_back(H_new);
-        }
-      } else {
-        OPEN.push_front(H_new);
-        EXPLORED_ARRIVED.emplace(std::move(key), H_new);
-        GC_HNodes.push_back(H_new);
-      }
-    }
-  }
+	    if (!RELAX_GOAL) {
+	      auto iter = EXPLORED.find(Q_to);
+	      if (iter != EXPLORED.end()) {
+	        // known configuration
+	        auto H_known = iter->second;
+	        // depth limit check before creating successor (solution size = depth+1)
+	        if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+	          reached_horizon = true;
+	          if (ANYTIME) continue; // keep searching until deadline/OPEN empty
+	          break;                 // legacy behavior: stop search at horizon
+	        }
+	        // limit depth by STEP_LIMIT (solution size = depth+1)
+	        if (STEP_LIMIT >= 0 && H->depth + 1 >= STEP_LIMIT) {
+	          reached_horizon = true;
+	        }
+		        if (REWRITE) {
+		          // Connect and relax costs/parents, as in lacam3.
+		          rewrite(H, H_known);
+		          OPEN.push_front(H_known);
+		        } else {
+		          // legacy behavior: create a new node if it improves g, otherwise reuse known
+		          const auto step = get_transition_cost(H, Q_to);
+		          PathCost g_new{H->g.primary + step.primary,
+		                        H->g.secondary + step.secondary};
+		          if (cost_less(H_known->g, g_new)) {
+		            OPEN.push_front(H_known);
+		          } else {
+		            auto H_new = new HNode(Q_to, D, H);
+		            OPEN.push_front(H_new);
+		            EXPLORED[H_new->Q] = H_new;
+	            GC_HNodes.push_back(H_new);
+	          }
+	        }
+	      } else {
+	        // new one -> insert
+	        // depth limit check before creating successor
+	        if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+	          reached_horizon = true;
+	          if (ANYTIME) continue; // keep searching until deadline/OPEN empty
+	          break;                 // legacy behavior: stop search at horizon
+	        }
+	        auto H_new = new HNode(Q_to, D, H);
+	        if (STEP_LIMIT >= 0 && H_new->depth >= STEP_LIMIT) {
+	          reached_horizon = true;
+	        }
+	        OPEN.push_front(H_new);
+	        EXPLORED[H_new->Q] = H_new;
+	        GC_HNodes.push_back(H_new);
+	      }
+	    } else {
+	      // depth limit check before creating successor (solution size = depth+1)
+	      if (STEP_LIMIT >= 0 && H->depth + 1 > STEP_LIMIT) {
+	        reached_horizon = true;
+	        if (ANYTIME) continue; // keep searching until deadline/OPEN empty
+	        break;                 // legacy behavior: stop search at horizon
+	      }
+	      // limit depth by STEP_LIMIT (solution size = depth+1)
+	      if (STEP_LIMIT >= 0 && H->depth + 1 >= STEP_LIMIT) {
+	        reached_horizon = true;
+	      }
+
+	      // compute arrived-goal state without constructing a node
+	      auto arrived = H->arrived_goal;
+	      for (int i = 0; i < static_cast<int>(ins->N); ++i) {
+	        if (arrived[i]) continue;
+	        if (D->get(i, Q_to[i]) == 0) arrived[i] = 1;
+	      }
+		      ArrivedKey key{Q_to, std::move(arrived)};
+		      auto iter = EXPLORED_ARRIVED.find(key);
+		      const auto step = get_transition_cost(H, Q_to);
+		      PathCost g_new{H->g.primary + step.primary,
+		                    H->g.secondary + step.secondary};
+		      if (iter != EXPLORED_ARRIVED.end()) {
+		        auto H_known = iter->second;
+		        if (REWRITE) {
+		          rewrite(H, H_known);
+		          OPEN.push_front(H_known);
+		        } else if (cost_less(H_known->g, g_new)) {
+		          OPEN.push_front(H_known);
+		        } else {
+		          auto H_new = new HNode(Q_to, D, H);
+		          OPEN.push_front(H_new);
+	          iter->second = H_new; // replace value; key is equivalent
+	          GC_HNodes.push_back(H_new);
+	        }
+	      } else {
+	        auto H_new = new HNode(Q_to, D, H);
+	        OPEN.push_front(H_new);
+	        EXPLORED_ARRIVED.emplace(std::move(key), H_new);
+	        GC_HNodes.push_back(H_new);
+	      }
+	    }
+	  }
 
   // backtrack
   Solution solution;
@@ -381,21 +466,278 @@ Solution LaCAM::solve()
 
   // end processing
   for (auto &&H : GC_HNodes) delete H;  // memory management
+  OPEN.clear();
+  EXPLORED.clear();
+  EXPLORED_ARRIVED.clear();
+  GC_HNodes.clear();
+  H_init = nullptr;
+  H_goal = nullptr;
 
   return solution;
 }
 
 bool LaCAM::set_new_config(HNode *H, LNode *L, Config &Q_to)
 {
-  // Debug: entering LocalGuide construction
-  solver_info(3, "enter set_new_config: H->depth=", H->depth,
-              " L->depth=", L->depth);
   local_guide.construct(H->Q, H->order);
 
   H->local_guide_paths = local_guide.get_current_guide_paths();
+  const int trials = std::max(1, PIBT_NUM);
 
-  for (auto d = 0; d < L->depth; ++d) Q_to[L->who[d]] = L->where[d];
-  auto ok = pibt.set_new_config(H->Q, Q_to, H->order);
-  solver_info(3, "leave set_new_config: ok=", ok);
-  return ok;
+  auto heuristic_cost = [&](const Config &C) -> int {
+    int h = 0;
+    for (int i = 0; i < static_cast<int>(ins->N); ++i) {
+      const int dist = D->get(i, C[i]);
+      if (!LocalGuide::ON) {
+        h += dist;
+        continue;
+      }
+      // Similar spirit to PIBT's LocalGuide usage: prefer the guided next vertex,
+      // but still account for distance-to-goal.
+      int guide_penalty = 0;
+      if (local_guide.Q_to.size() == static_cast<size_t>(ins->N) &&
+          local_guide.Q_to[i] != nullptr && C[i] != local_guide.Q_to[i]) {
+        guide_penalty = 1;
+      }
+      h += dist + guide_penalty;
+    }
+    return h;
+  };
+
+  // Prepare candidate configs with constraints.
+  std::vector<Config> Q_cands(trials, Config(ins->N, nullptr));
+  for (int k = 0; k < trials; ++k) {
+    for (int d = 0; d < L->depth; ++d) Q_cands[k][L->who[d]] = L->where[d];
+  }
+
+  int best_idx = -1;
+  int best_f = INT_MAX;
+	  for (int k = 0; k < trials; ++k) {
+	    auto *pibt_k = (k < static_cast<int>(pibt_pool.size())) ? pibt_pool[k] : &pibt;
+	    const auto ok = pibt_k->set_new_config(H->Q, Q_cands[k], H->order);
+	    if (!ok) continue;
+	    const auto step = get_transition_cost(H, Q_cands[k]);
+	    const int edge_score =
+	        (COST_MODE == CostMode::LexiUnreachedMove)
+	            ? static_cast<int>(step.secondary)
+	            : static_cast<int>(step.primary);
+	    const int f = edge_score + (MC_USE_HEURISTIC ? heuristic_cost(Q_cands[k]) : 0);
+	    if (f < best_f) {
+	      best_f = f;
+	      best_idx = k;
+	    }
+	  }
+
+  if (best_idx < 0) {
+    return false;
+  }
+
+  std::copy(Q_cands[best_idx].begin(), Q_cands[best_idx].end(), Q_to.begin());
+  return true;
+}
+
+int LaCAM::get_edge_cost(const Config &from, const Config &to) const
+{
+  const int N = static_cast<int>(to.size());
+  auto cost = 0;
+  for (int i = 0; i < N; ++i) {
+    const auto dist_to_goal = D->get(i, to[i]);
+    if (from[i] != to[i] || dist_to_goal > 0) cost += 1;
+  }
+  return cost;
+}
+
+int LaCAM::get_move_cost(const Config &from, const Config &to) const
+{
+  const int N = static_cast<int>(to.size());
+  int cost = 0;
+  for (int i = 0; i < N; ++i) cost += (from[i] != to[i]);
+  return cost;
+}
+
+int LaCAM::get_unreached_count(const HNode *from) const
+{
+  if (from == nullptr) return 0;
+  int cost = 0;
+  for (auto b : from->arrived_goal) cost += (b == 0);
+  return cost;
+}
+
+int LaCAM::get_unreached_count_after(const HNode *from, const Config &to) const
+{
+  if (from == nullptr) return 0;
+  const int N = static_cast<int>(to.size());
+  const int n = std::min(N, static_cast<int>(from->arrived_goal.size()));
+  int newly_arrived = 0;
+  for (int i = 0; i < n; ++i) {
+    if (from->arrived_goal[static_cast<size_t>(i)] != 0) continue;
+    if (D->get(i, to[i]) == 0) ++newly_arrived;
+  }
+  return std::max(0, get_unreached_count(from) - newly_arrived);
+}
+
+int LaCAM::get_next_goal_miss_count(const Config &to) const
+{
+  const int N = static_cast<int>(to.size());
+  int miss = 0;
+  for (int i = 0; i < N; ++i) miss += (D->get(i, to[i]) > 0);
+  return miss;
+}
+
+PathCost LaCAM::get_transition_cost(const HNode *from, const Config &to) const
+{
+  if (from == nullptr) return PathCost{0, 0};
+  switch (COST_MODE) {
+    case CostMode::LegacyEdge:
+      return PathCost{get_edge_cost(from->Q, to), 0};
+    case CostMode::UnreachedCount:
+      return PathCost{get_unreached_count(from), 0};
+    case CostMode::WeightedSumUnreachedMove: {
+      const long long u = static_cast<long long>(
+          UNREACHED_USE_AFTER ? get_unreached_count_after(from, to)
+                              : get_unreached_count(from));
+      const long long m = static_cast<long long>(get_move_cost(from->Q, to));
+      return PathCost{u * static_cast<long long>(COST_W_UNREACHED) +
+                          m * static_cast<long long>(COST_W_MOVE),
+                      0};
+    }
+    case CostMode::LexiUnreachedMove:
+      return PathCost{get_unreached_count(from), get_move_cost(from->Q, to)};
+    case CostMode::NextGoalMissCount:
+      return PathCost{get_next_goal_miss_count(to), 0};
+  }
+  return PathCost{0, 0};
+}
+
+PathCost LaCAM::get_transition_cost(const HNode *from, const HNode *to) const
+{
+  if (from == nullptr || to == nullptr) return PathCost{0, 0};
+  return get_transition_cost(from, to->Q);
+}
+
+void LaCAM::rewrite(HNode *H_from, HNode *H_to)
+{
+  if (H_from == nullptr || H_to == nullptr) return;
+
+  // update neighbors (bidirectional)
+  H_from->neighbor.insert(H_to);
+  H_to->neighbor.insert(H_from);
+
+  // Dijkstra-like relaxation (queue is sufficient, as in lacam3)
+  std::queue<HNode *> Q({H_from});
+  while (!Q.empty()) {
+    auto n_from = Q.front();
+    Q.pop();
+    for (auto n_to : n_from->neighbor) {
+      if (RELAX_GOAL) {
+        const auto n = std::min(n_from->arrived_goal.size(), n_to->arrived_goal.size());
+        bool monotone = true;
+        for (size_t i = 0; i < n; ++i) {
+          if (n_from->arrived_goal[i] > n_to->arrived_goal[i]) {
+            monotone = false;
+            break;
+          }
+        }
+        if (!monotone) continue;
+      }
+      const auto step = get_transition_cost(n_from, n_to);
+      PathCost g_val{n_from->g.primary + step.primary,
+                    n_from->g.secondary + step.secondary};
+      if (cost_less(g_val, n_to->g)) {
+        if (n_to == H_goal) {
+          solver_info(2, "cost update: ", H_goal->g.primary, ",", H_goal->g.secondary,
+                      " -> ", g_val.primary, ",", g_val.secondary);
+        }
+        n_to->g = g_val;
+        n_to->parent = n_from;
+        n_to->depth = n_from->depth + 1;
+        Q.push(n_to);
+        if (H_goal != nullptr && cost_less(n_to->g, H_goal->g)) OPEN.push_front(n_to);
+      }
+    }
+  }
+}
+
+void LaCAM::apply_new_solution(const Solution &plan)
+{
+  if (!REWRITE) return;
+  if (plan.empty()) return;
+
+  if (!RELAX_GOAL) {
+    auto iter0 = EXPLORED.find(plan.front());
+    if (iter0 == EXPLORED.end()) return;
+
+    auto H_from = iter0->second;
+    for (size_t t = 1; t < plan.size(); ++t) {
+      const auto &Q = plan[t];
+      HNode *H_to = nullptr;
+      auto iter = EXPLORED.find(Q);
+      if (iter != EXPLORED.end()) {
+        H_to = iter->second;
+        rewrite(H_from, H_to);
+      } else {
+        H_to = new HNode(Q, D, H_from);
+        EXPLORED[H_to->Q] = H_to;
+        GC_HNodes.push_back(H_to);
+        OPEN.push_front(H_to);
+      }
+      H_from = H_to;
+    }
+
+    if (is_same_config(plan.back(), ins->goals)) {
+      auto iter_goal = EXPLORED.find(plan.back());
+	      if (iter_goal != EXPLORED.end()) {
+	        auto node = iter_goal->second;
+	        if (H_goal == nullptr || cost_less(node->g, H_goal->g)) H_goal = node;
+	      }
+	    }
+	    return;
+	  }
+
+  // RELAX_GOAL: state is (Config, arrived_goal), so reconstruct arrived_goal along plan.
+  if (ins == nullptr) return;
+  const int N = static_cast<int>(ins->N);
+  if (plan.front().size() != static_cast<size_t>(N)) return;
+
+  std::vector<uint8_t> arrived(static_cast<size_t>(N), 0);
+  int arrived_cnt = 0;
+  for (int i = 0; i < N; ++i) {
+    if (D->get(i, plan.front()[i]) == 0) {
+      arrived[static_cast<size_t>(i)] = 1;
+      ++arrived_cnt;
+    }
+  }
+
+  auto iter0 = EXPLORED_ARRIVED.find(ArrivedKey{plan.front(), arrived});
+  if (iter0 == EXPLORED_ARRIVED.end()) return;
+
+  auto H_from = iter0->second;
+  for (size_t t = 1; t < plan.size(); ++t) {
+    const auto &Q = plan[t];
+    if (Q.size() != static_cast<size_t>(N)) return;
+    for (int i = 0; i < N; ++i) {
+      if (arrived[static_cast<size_t>(i)]) continue;
+      if (D->get(i, Q[i]) == 0) {
+        arrived[static_cast<size_t>(i)] = 1;
+        ++arrived_cnt;
+      }
+    }
+
+    auto key = ArrivedKey{Q, arrived};
+    HNode *H_to = nullptr;
+    auto iter = EXPLORED_ARRIVED.find(key);
+    if (iter != EXPLORED_ARRIVED.end()) {
+      H_to = iter->second;
+      rewrite(H_from, H_to);
+    } else {
+      H_to = new HNode(Q, D, H_from);
+      EXPLORED_ARRIVED.emplace(std::move(key), H_to);
+      GC_HNodes.push_back(H_to);
+      OPEN.push_front(H_to);
+    }
+
+	    if (arrived_cnt == N) {
+	      if (H_goal == nullptr || cost_less(H_to->g, H_goal->g)) H_goal = H_to;
+	    }
+    H_from = H_to;
+  }
 }

@@ -34,9 +34,36 @@ int main(int argc, char *argv[])
       .help("limit LaCAM high-level depth (solution steps); -1 for unlimited")
       .scan<'d', int>()
       .default_value(-1);
+  program.add_argument("--anytime")
+      .help("anytime search: keep searching until time limit; with --lacam_horizon, treat horizon as a depth cap (do not stop at horizon)")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--rewrite")
+      .help("enable LaCAM3-style rewrite (rewire/relax costs when reaching an explored configuration)")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--lacam_cost")
+      .help("LaCAM cost mode: legacy, unreached_count, weighted_sum, lexi_unreached_move, next_goal_miss")
+      .default_value(std::string("legacy"));
+  program.add_argument("--lacam_cost_w_unreached")
+      .help("weight for unreached_count term (used by --lacam_cost weighted_sum)")
+      .scan<'d', int>()
+      .default_value(1);
+  program.add_argument("--lacam_cost_w_move")
+      .help("weight for move_count term (used by --lacam_cost weighted_sum)")
+      .scan<'d', int>()
+      .default_value(1);
+  program.add_argument("--lacam_unreached_after")
+      .help("in weighted_sum, compute unreached term after the transition (more myopic/immediate)")
+      .default_value(false)
+      .implicit_value(true);
   program.add_argument("--relax_goal")
       .help("relax goal condition: each agent must visit its goal at least once (not necessarily simultaneously)")
       .default_value(true)
+      .implicit_value(true);
+  program.add_argument("--strict_goal")
+      .help("disable relax_goal behavior (require final configuration equals goals)")
+      .default_value(false)
       .implicit_value(true);
   // Lifelong control
   program.add_argument("-S", "--steps")
@@ -57,6 +84,10 @@ int main(int argc, char *argv[])
   program.add_argument("-l", "--log_short")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--log-local-guidance")
+      .help("include LocalGuide (step-by-step guidance paths) in output log; can be large")
+      .default_value(false)
+      .implicit_value(true);
   program.add_argument("--log-all-step")
       .default_value(false)
       .implicit_value(true);
@@ -68,6 +99,14 @@ int main(int argc, char *argv[])
   program.add_argument("--no_pibt_swap")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--pibt_num")
+      .help("number of PIBT trials for Monte-Carlo configuration generation")
+      .scan<'d', int>()
+      .default_value(1);
+  program.add_argument("--mc_no_heuristic")
+      .help("disable heuristic_cost in MC candidate selection (MC uses edge-cost only)")
+      .default_value(false)
+      .implicit_value(true);
 
   // PIBT tie-breaking (ported from pibt-tiebreaking)
   program.add_argument("--no_hindrance")
@@ -75,9 +114,17 @@ int main(int argc, char *argv[])
       .default_value(false)
       .implicit_value(true);
   program.add_argument("--pibt_sort")
-      .help("PIBT tie-break mode: 0=legacy(random), 1=prefer-free, 2=hindrance, 3=random+hindrance")
+      .help("PIBT tie-break mode: 0=legacy(random), 1=prefer-free, 2=hindrance+regret, 3=regret+hindrance")
       .scan<'d', int>()
       .default_value(2);
+  program.add_argument("--num_regret_sampling")
+      .help("PIBT regret resampling iterations (0 disables regret)")
+      .scan<'d', int>()
+      .default_value(0);
+  program.add_argument("--new_regret_weight")
+      .help("PIBT regret EMA weight in [0,1]")
+      .scan<'g', float>()
+      .default_value(0.9f);
 
   program.add_argument("--lg").default_value(false).implicit_value(true);
   program.add_argument("--lg_num_refine").scan<'d', int>().default_value(1);
@@ -194,7 +241,8 @@ int main(int argc, char *argv[])
 
   LocalGuide::COLLISION_COST = program.get<float>("lg_collision_cost");
   LocalGuide::COLLISION_COST_ORDER = program.get<float>("lg_collision_cost_order");
-  LocalGuide::CLEAR_GOAL_FIRST = program.get<bool>("relax_goal");
+  LocalGuide::CLEAR_GOAL_FIRST =
+      program.get<bool>("relax_goal") && !program.get<bool>("strict_goal");
 
   // global guide
   GlobalGuide::ON = program.get<bool>("gg");
@@ -204,13 +252,42 @@ int main(int argc, char *argv[])
   PIBT::SWAP = !program.get<bool>("no_pibt_swap");
   PIBT::NEXT_STEP_HINDRANCE = !program.get<bool>("no_hindrance");
   PIBT::SWITCH_ORDER = program.get<int>("pibt_sort");
+  PIBT::NUM_REGRET_SAMPLING = std::max(0, program.get<int>("num_regret_sampling"));
+  PIBT::NEW_REGRET_WEIGHT = std::min(1.0f, std::max(0.0f, program.get<float>("new_regret_weight")));
+  LaCAM::PIBT_NUM = std::max(1, program.get<int>("pibt_num"));
+  LaCAM::MC_USE_HEURISTIC = !program.get<bool>("mc_no_heuristic");
   // LaCAM horizon
+  LaCAM::ANYTIME = program.get<bool>("anytime");
+  LaCAM::REWRITE = program.get<bool>("rewrite");
+  {
+    const auto cost_mode = program.get<std::string>("lacam_cost");
+    if (cost_mode == "legacy") {
+      LaCAM::COST_MODE = LaCAM::CostMode::LegacyEdge;
+    } else if (cost_mode == "unreached_count") {
+      LaCAM::COST_MODE = LaCAM::CostMode::UnreachedCount;
+    } else if (cost_mode == "weighted_sum") {
+      LaCAM::COST_MODE = LaCAM::CostMode::WeightedSumUnreachedMove;
+    } else if (cost_mode == "lexi_unreached_move") {
+      LaCAM::COST_MODE = LaCAM::CostMode::LexiUnreachedMove;
+    } else if (cost_mode == "next_goal_miss") {
+      LaCAM::COST_MODE = LaCAM::CostMode::NextGoalMissCount;
+    } else {
+      std::cerr << "Unknown --lacam_cost '" << cost_mode
+                << "'. Falling back to 'legacy'." << std::endl;
+      LaCAM::COST_MODE = LaCAM::CostMode::LegacyEdge;
+    }
+  }
+  LaCAM::COST_W_UNREACHED = std::max(0, program.get<int>("lacam_cost_w_unreached"));
+  LaCAM::COST_W_MOVE = std::max(0, program.get<int>("lacam_cost_w_move"));
+  LaCAM::UNREACHED_USE_AFTER = program.get<bool>("lacam_unreached_after");
   LaCAM::STEP_LIMIT = program.get<int>("lacam_horizon");
-  LaCAM::RELAX_GOAL = program.get<bool>("relax_goal");
+  LaCAM::RELAX_GOAL =
+      program.get<bool>("relax_goal") && !program.get<bool>("strict_goal");
 
   // lns, plns
   LNS::ON = program.get<bool>("lns");
-  LNS::RELAX_GOAL_CONDITION = program.get<bool>("relax_goal");
+  LNS::RELAX_GOAL_CONDITION =
+      program.get<bool>("relax_goal") && !program.get<bool>("strict_goal");
   {
     // Only meaningful when RELAX_GOAL_CONDITION is enabled.
     const auto obj = program.get<std::string>("lns_relax_objective");
@@ -260,6 +337,7 @@ int main(int argc, char *argv[])
     auto lacam = result.lacam;
     const auto comp_time_ms = deadline.elapsed_ms();
     const auto comp_time_init_ms = result.comp_time_init_ms;
+    const auto log_local_guidance = program.get<bool>("log-local-guidance");
 
     // failure
     if (solution.empty()) {
@@ -286,15 +364,16 @@ int main(int argc, char *argv[])
     const auto comp_time_init_to_log = LNS::ON ? comp_time_init_ms : -1.0;
     const auto empty_solution = Solution();
     const auto& solution_init_to_log = LNS::ON ? solution_init : empty_solution;
+    const auto* local_guide_to_log = log_local_guidance ? &lacam->local_guide : nullptr;
     if (relax_goal) {
       const bool solved_override = true;
       make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short,
-               &lacam->local_guide, comp_time_init_to_log, solution_init_to_log,
-               /*lifelong_goals_history=*/nullptr, /*goal_change_count=*/0,
+               local_guide_to_log, comp_time_init_to_log, solution_init_to_log,
+               /*lifelong_goals_history=*/nullptr, /*lifelong_lb_sp_metrics=*/nullptr, /*goal_change_count=*/0,
                /*local_guidance_history=*/nullptr, &solved_override);
     } else {
       make_log(ins, solution, output_name, comp_time_ms, map_name, seed, log_short,
-               &lacam->local_guide, comp_time_init_to_log, solution_init_to_log);
+               local_guide_to_log, comp_time_init_to_log, solution_init_to_log);
     }
     delete lacam;
     return 0;
@@ -302,6 +381,8 @@ int main(int argc, char *argv[])
 
   // Lifelong LaCAM mode (outer loop: replan each step)
   const auto log_all_step = program.get<bool>("log-all-step");
+  const auto log_local_guidance = program.get<bool>("log-local-guidance");
   return run_lifelong(ins, verbose, time_limit_sec, seed, steps_limit,
-                      output_name, map_name, log_short, lifelong_seed_mode, log_all_step);
+                      output_name, map_name, log_short, lifelong_seed_mode, log_all_step,
+                      log_local_guidance);
 }

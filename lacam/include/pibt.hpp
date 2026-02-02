@@ -40,11 +40,14 @@ struct PIBT {
   std::array<PIBTHeuristic, 5> C_cost;
   std::vector<std::array<int, 5> > C_indices;
   std::array<int, 4> neighbor_agents;
+  std::vector<std::array<float, 5> > R;  // regret per action candidate
 
   // hyper parameters
   static bool SWAP;
   static bool DETERMINISTIC;
   static bool NEXT_STEP_HINDRANCE;
+  static int NUM_REGRET_SAMPLING;
+  static float NEW_REGRET_WEIGHT;
   static int SWITCH_ORDER;
 
   // guidance
@@ -56,7 +59,7 @@ struct PIBT {
 
   bool set_new_config(const Config &Q_from, Config &Q_to,
                       const std::vector<int> &order);
-  bool funcPIBT(const int i, const Config &Q_from, Config &Q_to);
+  std::tuple<bool, int> funcPIBT(const int i, const Config &Q_from, Config &Q_to);
 
   int is_swap_required_and_possible(const int ai, const Config &Q_from,
                                     Config &Q_to, Vertex *v_i_target);
