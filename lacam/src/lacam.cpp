@@ -5,6 +5,11 @@
 
 bool LaCAM::ANYTIME = false;
 bool LaCAM::REWRITE = false;
+bool LaCAM::REWRITE_LOG = false;
+bool LaCAM::REWRITE_LOG_GOAL_ONLY = false;
+bool LaCAM::REWRITE_LOG_SUMMARY = false;
+int LaCAM::REWRITE_LOG_LEVEL = 2;
+int LaCAM::REWRITE_LOG_MAX = 50;
 int LaCAM::PIBT_NUM = 1;
 bool LaCAM::MC_USE_HEURISTIC = true;
 int LaCAM::STEP_LIMIT = -1;
@@ -192,6 +197,9 @@ void LaCAM::set_initial_priorities(const std::vector<HNodePriority>& priorities)
 Solution LaCAM::solve()
 {
   solver_info(2, "LaCAM begins");
+  rewrite_call_cnt = 0;
+  rewrite_relax_cnt = 0;
+  rewrite_relax_printed = 0;
   reached_horizon = false;
   last_partial_solution.clear();
   last_root_priorities.clear();
@@ -300,7 +308,7 @@ Solution LaCAM::solve()
     // create successors at the high-level search
     auto Q_to = Config(ins->N, nullptr);
     // Helpful debug at verbose>=2 to locate crash point
-    solver_info(2, "about to call set_new_config, L->depth=", L->depth);
+    // solver_info(2, "about to call set_new_config, L->depth=", L->depth);
     auto res = set_new_config(H, L, Q_to);
 
     // low level search
@@ -464,6 +472,13 @@ Solution LaCAM::solve()
 
   if (solution.empty() && OPEN.empty()) solver_info(2, "unsolvable instance");
 
+  if (REWRITE && REWRITE_LOG_SUMMARY) {
+    solver_info(REWRITE_LOG_LEVEL,
+                "rewrite summary: calls=", rewrite_call_cnt,
+                " relaxations=", rewrite_relax_cnt,
+                " printed=", rewrite_relax_printed);
+  }
+
   // end processing
   for (auto &&H : GC_HNodes) delete H;  // memory management
   OPEN.clear();
@@ -617,6 +632,7 @@ PathCost LaCAM::get_transition_cost(const HNode *from, const HNode *to) const
 void LaCAM::rewrite(HNode *H_from, HNode *H_to)
 {
   if (H_from == nullptr || H_to == nullptr) return;
+  ++rewrite_call_cnt;
 
   // update neighbors (bidirectional)
   H_from->neighbor.insert(H_to);
@@ -643,7 +659,22 @@ void LaCAM::rewrite(HNode *H_from, HNode *H_to)
       PathCost g_val{n_from->g.primary + step.primary,
                     n_from->g.secondary + step.secondary};
       if (cost_less(g_val, n_to->g)) {
-        if (n_to == H_goal) {
+        ++rewrite_relax_cnt;
+        const auto old = n_to->g;
+        const bool is_goal_node = (n_to == H_goal);
+
+        if (REWRITE_LOG &&
+            (!REWRITE_LOG_GOAL_ONLY || is_goal_node) &&
+            (REWRITE_LOG_MAX <= 0 ||
+             rewrite_relax_printed < static_cast<long long>(REWRITE_LOG_MAX))) {
+          ++rewrite_relax_printed;
+          solver_info(REWRITE_LOG_LEVEL,
+                      "rewrite relax: (", old.primary, ",", old.secondary, ") -> (",
+                      g_val.primary, ",", g_val.secondary, ")",
+                      is_goal_node ? " [goal]" : "",
+                      " depth ", n_from->depth, " -> ", (n_from->depth + 1));
+        } else if (is_goal_node) {
+          // Legacy behavior: announce a goal cost improvement at verbose>=2.
           solver_info(2, "cost update: ", H_goal->g.primary, ",", H_goal->g.secondary,
                       " -> ", g_val.primary, ",", g_val.secondary);
         }

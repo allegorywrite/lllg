@@ -154,6 +154,11 @@ struct LaCAM {
 
   static bool ANYTIME;
   static bool REWRITE;
+  static bool REWRITE_LOG;
+  static bool REWRITE_LOG_GOAL_ONLY;
+  static bool REWRITE_LOG_SUMMARY;
+  static int REWRITE_LOG_LEVEL;
+  static int REWRITE_LOG_MAX;
   static int PIBT_NUM;
   static bool MC_USE_HEURISTIC;
   // Maximum allowed high-level depth (solution length). -1 for unlimited.
@@ -167,6 +172,11 @@ struct LaCAM {
   // If true, compute the unreached term using the post-transition reached state.
   // This makes reaching a goal "count immediately" in the weighted_sum objective.
   static bool UNREACHED_USE_AFTER;
+
+  // rewrite logging state (per-solve)
+  long long rewrite_call_cnt = 0;
+  long long rewrite_relax_cnt = 0;
+  long long rewrite_relax_printed = 0;
 
   LaCAM(const Instance *_ins, DistTable *_D, int _verbose = 0,
         const Deadline *_deadline = nullptr, int _seed = 0);

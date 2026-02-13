@@ -42,6 +42,26 @@ int main(int argc, char *argv[])
       .help("enable LaCAM3-style rewrite (rewire/relax costs when reaching an explored configuration)")
       .default_value(false)
       .implicit_value(true);
+  program.add_argument("--rewrite_log")
+      .help("log rewrite relaxations (cost improvements)")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--rewrite_log_goal_only")
+      .help("with --rewrite_log, only log relaxations that improve the current goal node")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--rewrite_log_summary")
+      .help("print a rewrite relaxation summary at the end of each solve")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("--rewrite_log_level")
+      .help("verbosity level used by --rewrite_log/--rewrite_log_summary")
+      .scan<'d', int>()
+      .default_value(2);
+  program.add_argument("--rewrite_log_max")
+      .help("maximum number of rewrite relaxation logs per solve (0 disables per-relaxation logging)")
+      .scan<'d', int>()
+      .default_value(50);
   program.add_argument("--lacam_cost")
       .help("LaCAM cost mode: legacy, unreached_count, weighted_sum, lexi_unreached_move, next_goal_miss")
       .default_value(std::string("legacy"));
@@ -259,6 +279,11 @@ int main(int argc, char *argv[])
   // LaCAM horizon
   LaCAM::ANYTIME = program.get<bool>("anytime");
   LaCAM::REWRITE = program.get<bool>("rewrite");
+  LaCAM::REWRITE_LOG = program.get<bool>("rewrite_log");
+  LaCAM::REWRITE_LOG_GOAL_ONLY = program.get<bool>("rewrite_log_goal_only");
+  LaCAM::REWRITE_LOG_SUMMARY = program.get<bool>("rewrite_log_summary");
+  LaCAM::REWRITE_LOG_LEVEL = std::max(0, program.get<int>("rewrite_log_level"));
+  LaCAM::REWRITE_LOG_MAX = std::max(0, program.get<int>("rewrite_log_max"));
   {
     const auto cost_mode = program.get<std::string>("lacam_cost");
     if (cost_mode == "legacy") {
