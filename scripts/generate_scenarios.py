@@ -86,10 +86,9 @@ def generate_scenario(map_name, width, height, valid_positions, num_agents, seed
 def main():
     # map_file = "assets/dense_warehouse.map"
     # map_name = "dense_warehouse"
-    map_file = "assets/asset_for_benchmark/mapf-map/ost003d.map"
-    map_name = "ost003d"
-    scenario_dir = "assets"
-    
+    map_file = "assets/certain/random-32-32-10.map"
+    map_name = "random-32-32-10"
+    scenario_dir = "assets/certain"
     # Read map
     grid, width, height = read_map_file(map_file)
     valid_positions = get_valid_positions(grid, width, height)
@@ -99,10 +98,10 @@ def main():
     
     # Generate scenarios 1-20 with maximum possible agents
     # Each agent needs unique start and unique goal, but starts can overlap with other agents' goals
-    max_agents = min(10000, len(valid_positions))
+    max_agents = min(920, len(valid_positions))
     print(f"Maximum agents possible: {max_agents}")
     
-    for scenario_num in range(1, 21):
+    for scenario_num in range(1, 2):
         scenario_file = f"{scenario_dir}/{map_name}-random-{scenario_num}.scen"
         
         try:
