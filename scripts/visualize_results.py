@@ -127,6 +127,15 @@ def _try_int(value):
         return None
 
 
+def _downsample_ticks(values, max_ticks: int | None):
+    if max_ticks is None or max_ticks <= 0 or len(values) <= max_ticks:
+        return values
+    # Keep endpoints and sample interior ticks as evenly as possible.
+    indices = np.linspace(0, len(values) - 1, num=max_ticks)
+    sampled_indices = sorted(set(int(round(i)) for i in indices))
+    return [values[i] for i in sampled_indices]
+
+
 def _extract_config_value(config_str: str, key: str):
     if not isinstance(config_str, str) or not key:
         return None
@@ -716,7 +725,11 @@ def add_mean_line_to_scatter(
 
             # legendがnullの場合は数字のみ表示
             if custom_legend is None:
-                label_text = str(label_value) + " window"
+                # label_text = "m = " + str(label_value)
+                if label_value == "2":
+                    label_text = "w hindrance"
+                else:
+                    label_text = "w/o hindrance"
             else:
                 legend_property_name = custom_legend if custom_legend else line_property
                 label_text = f'{legend_property_name}={label_value}'
@@ -1229,7 +1242,8 @@ def plot_violin(df, output_dir, vary_property, plot_settings, baseline_data=None
         # ベースラインがない場合は通常の色設定
         palette = _distinct_palette(num_colors)
     
-    plt.figure(figsize=(12, 8))
+    # plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(6, 4))
     
     # バイオリンプロットを描画
     if orient == 'horizontal':
@@ -1300,7 +1314,7 @@ def _plot_single_scatter(
     annotate_rightmost_only: bool = False,
 ):
     """単一の散布図を作成するヘルパー関数"""
-    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(6.5, 7))
     
     # vary_property がコラボキーかどうかを判定
     is_collab_plot = 'collab_config_str' in df.columns and df['collab_key'].iloc[0] == vary_property if 'collab_key' in df.columns and not df.empty else False
@@ -1803,13 +1817,13 @@ def _plot_single_scatter(
         y_range = y_max - y_min
         
         # マージンを追加
-        x_margin = x_range * 0.05 if x_range > 0 else 1
-        y_margin = y_range * 0.05 if y_range > 0 else 0.1
+        x_margin = x_range * 0.2 if x_range > 0 else 1
+        y_margin = y_range * 0.2 if y_range > 0 else 0.1
         
+        ax.set_xlim(x_min - x_margin, x_max + x_margin)
         # ax.set_xlim(x_min - x_margin, x_max + x_margin)
-        # ax.set_xlim(x_min - x_margin, x_max + x_margin)
-        # ax.set_ylim(0.6,  1.5)
-        # ax.set_ylim(0, y_max + y_margin)
+        # ax.set_ylim(2.5,  4.5)
+        ax.set_ylim(y_min - y_margin, y_max + y_margin)
         # ax.set_ylim(0, 2500)
         # ax.set_xlim(x_min, x_max)
         # ax.set_ylim(y_min, y_max)
@@ -1842,7 +1856,7 @@ def _plot_single_scatter(
         if 'violin_params' in plot_settings:
             x_tick_nbins = plot_settings['violin_params'].get('x_tick_nbins', x_tick_nbins)
     if x_tick_nbins is None:
-        x_tick_nbins = 6
+        x_tick_nbins = 3
     try:
         is_numeric_x = x_col in df.columns and pd.api.types.is_numeric_dtype(df[x_col])
     except Exception:
@@ -1868,6 +1882,7 @@ def _plot_single_scatter(
             if 0 < len(uniq) <= 30:
                 if want_integer:
                     uniq = sorted(set(int(round(v)) for v in uniq))
+                uniq = _downsample_ticks(uniq, x_tick_nbins)
                 ax.set_xticks(uniq)
                 ax.set_xticklabels([str(v) for v in uniq])
             else:
