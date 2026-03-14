@@ -17,7 +17,7 @@ The paper will appear at SoCS-26.
 <table>
   <tr>
     <td align="center">
-      <img alt="LaCAM baseline" src="media/lifelong_lacam.gif" width="100%"/> <p><b>LaCAM</b> — The baseline configuration-based LMAPF solver.
+      <img alt="LaCAM baseline" src="media/lifelong_lacam.gif" width="95%"/> <p><b>LaCAM</b> — The baseline configuration-based LMAPF solver.
       </p>
     </td>
     <td align="center">
