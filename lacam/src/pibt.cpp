@@ -93,16 +93,19 @@ bool PIBT::set_new_config(const Config &Q_from, Config &Q_to,
   return success;
 }
 
-std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &Q_to)
+std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from,
+                                     Config &Q_to)
 {
   // if (DETERMINISTIC) {
-  //   std::cout << "funcPIBT called for agent " << i 
+  //   std::cout << "funcPIBT called for agent " << i
   //             << " at (" << Q_from[i]->x << "," << Q_from[i]->y << ")"
-  //             << " goal=(" << ins->goals[i]->x << "," << ins->goals[i]->y << ")" << std::endl;
+  //             << " goal=(" << ins->goals[i]->x << "," << ins->goals[i]->y <<
+  //             ")" << std::endl;
   // }
   const auto K = Q_from[i]->neighbor.size();
 
-  const bool use_hindrance = NEXT_STEP_HINDRANCE && (SWITCH_ORDER == 2 || SWITCH_ORDER == 3);
+  const bool use_hindrance =
+      NEXT_STEP_HINDRANCE && (SWITCH_ORDER == 2 || SWITCH_ORDER == 3);
   int neighbor_agent_idx = 0;
   if (use_hindrance) {
     for (auto u : Q_from[i]->neighbor) {
@@ -130,7 +133,8 @@ std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &
     if (use_hindrance) {
       for (int k = 0; k < neighbor_agent_idx; ++k) {
         const auto j = neighbor_agents[k];
-        if (Q_from[j] != u && D->get(j, u) < D->get(j, Q_from[j])) next_step_hindrance += 1.0f;
+        if (Q_from[j] != u && D->get(j, u) < D->get(j, Q_from[j]))
+          next_step_hindrance += 1.0f;
       }
     }
 
@@ -139,7 +143,9 @@ std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &
 
     float tie_breaker = DETERMINISTIC ? 0.0f : rrd(MT);
     const int primary_cost = swap ? -D->get(i, u) : lg;
-    const float regret_est = (u_idx >= 0 && u_idx < static_cast<int>(R[i].size())) ? R[i][u_idx] : 0.0f;
+    const float regret_est =
+        (u_idx >= 0 && u_idx < static_cast<int>(R[i].size())) ? R[i][u_idx]
+                                                              : 0.0f;
 
     // Switchable tie-breaking (ported from pibt-tiebreaking).
     // 0: legacy (primary, random)
@@ -150,10 +156,12 @@ std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &
       return std::make_tuple(primary_cost, inheri, tie_breaker, 0.0f);
     }
     if (SWITCH_ORDER == 2) {
-      return std::make_tuple(primary_cost, next_step_hindrance, regret_est, tie_breaker);
+      return std::make_tuple(primary_cost, next_step_hindrance, regret_est,
+                             tie_breaker);
     }
     if (SWITCH_ORDER == 3) {
-      return std::make_tuple(primary_cost, regret_est, next_step_hindrance, tie_breaker);
+      return std::make_tuple(primary_cost, regret_est, next_step_hindrance,
+                             tie_breaker);
     }
     return std::make_tuple(primary_cost, tie_breaker, 0.0f, 0.0f);
   };
@@ -205,7 +213,7 @@ std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &
 
   // main loop
   // if (DETERMINISTIC && i == 4) {  // Debug agent 5 (index 4)
-  //   std::cout << "Agent " << i << " at " << Q_from[i]->index 
+  //   std::cout << "Agent " << i << " at " << Q_from[i]->index
   //             << " (" << Q_from[i]->x << "," << Q_from[i]->y << ")"
   //             << " goal=" << ins->goals[i]->index
   //             << " (" << ins->goals[i]->x << "," << ins->goals[i]->y << ")"
@@ -229,8 +237,10 @@ std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &
     // avoid vertex conflicts
     if (occupied_next[u->id] != NO_AGENT) {
       // if (DETERMINISTIC && i == 4) {
-      //   std::cout << "    k=" << k << " vertex=" << u->index << " (" << u->x << "," << u->y 
-      //             << ") REJECTED: occupied_next by agent " << occupied_next[u->id] << std::endl;
+      //   std::cout << "    k=" << k << " vertex=" << u->index << " (" << u->x
+      //   << "," << u->y
+      //             << ") REJECTED: occupied_next by agent " <<
+      //             occupied_next[u->id] << std::endl;
       // }
       continue;
     }
@@ -251,17 +261,18 @@ std::tuple<bool, int> PIBT::funcPIBT(const int i, const Config &Q_from, Config &
       const bool validity = std::get<0>(res);
       regret = std::get<1>(res);
       if (u_idx >= 0 && u_idx < static_cast<int>(R[i].size())) {
-        R[i][u_idx] =
-            (1.0f - NEW_REGRET_WEIGHT) * R[i][u_idx] +
-            NEW_REGRET_WEIGHT * static_cast<float>(regret);
+        R[i][u_idx] = (1.0f - NEW_REGRET_WEIGHT) * R[i][u_idx] +
+                      NEW_REGRET_WEIGHT * static_cast<float>(regret);
       }
       if (!validity) continue;
     }
     // if (j != NO_AGENT && u != Q_from[i] && Q_to[j] != nullptr) {
     //   if (DETERMINISTIC) {
-    //     std::cout << "  Priority inheritance SUCCESS: agent " << i << " pushed agent " << j 
+    //     std::cout << "  Priority inheritance SUCCESS: agent " << i << "
+    //     pushed agent " << j
     //               << " from (" << Q_from[j]->x << "," << Q_from[j]->y << ")"
-    //               << " to (" << Q_to[j]->x << "," << Q_to[j]->y << ")" << std::endl;
+    //               << " to (" << Q_to[j]->x << "," << Q_to[j]->y << ")" <<
+    //               std::endl;
     //   }
     // }
 

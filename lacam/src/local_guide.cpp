@@ -1,11 +1,13 @@
 #include "../include/local_guide.hpp"
-#include "../include/graph.hpp"  // get_x, get_y関数を使用するために追加
-#include <iostream>  // For debug logging
-#include <iomanip>   // For debug log formatting
-#include <thread>    // For multithreading
-#include <mutex>     // For multithreading
+
 #include <atomic>    // For atomic operations
 #include <chrono>    // For time measurement
+#include <iomanip>   // For debug log formatting
+#include <iostream>  // For debug logging
+#include <mutex>     // For multithreading
+#include <thread>    // For multithreading
+
+#include "../include/graph.hpp"
 
 // Definition of static member variables
 bool LocalGuide::ON = true;
@@ -34,8 +36,8 @@ LocalGuide::LocalGuide(const Instance* _ins, DistTable* _D, int seed,
       CLOSED(WINDOW, WSPPNodes(V_size, nullptr)),
       Q_to(N, nullptr),
       global_guide(gg),
-      cached_collision_costs(N, 0.0f), // Initialize collision cost cache to 0
-      step_counters(N, 0) // Initialize step counters for k-step to 0
+      cached_collision_costs(N, 0.0f),  // Initialize collision cost cache to 0
+      step_counters(N, 0)  // Initialize step counters for k-step to 0
 {
   for (auto k = 0; k < 10000; ++k) wspp_nodes.push_back(new WSPPNode());
   clear_history();
@@ -72,10 +74,7 @@ const std::vector<Path>& LocalGuide::get_paths_at_step(int step) const
   return guide_paths_history[step];
 }
 
-int LocalGuide::get_history_size() const
-{
-  return guide_paths_history.size();
-}
+int LocalGuide::get_history_size() const { return guide_paths_history.size(); }
 
 void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 {
@@ -100,7 +99,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       (void)ins->goals[0];
     }
   } catch (...) {
-    std::cerr << "LocalGuide construct: invalid Q_from or goals pointers" << std::endl;
+    std::cerr << "LocalGuide construct: invalid Q_from or goals pointers"
+              << std::endl;
   }
 
   auto cmp = [&](WSPPNode* a, WSPPNode* b) {
@@ -131,27 +131,30 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       collision = CT.getCollisionCost(parent->where, where, parent->when);
     }
     n->g = (parent == nullptr) ? 0 : parent->g + 1;
-    if (collision >= 1) n->g += COLLISION_COST + collision * COLLISION_COST_ORDER;
+    if (collision >= 1)
+      n->g += COLLISION_COST + collision * COLLISION_COST_ORDER;
 
     n->h = D->get(who, where);
 
     // auto&& gg_h = global_guide->get(who, where);
-    // n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second * GLOBAL_GUIDE_SECOND_ORDER;
+    // n->h += gg_h.first * GLOBAL_GUIDE_FIRST_ORDER + gg_h.second *
+    // GLOBAL_GUIDE_SECOND_ORDER;
 
     n->f = n->g + n->h;
     wspp_node_idx += 1;
     return n;
   };
-  thread_local std::vector<std::pair<int, int> > CLOSED_idx;  // Changed to thread-local variable
+  thread_local std::vector<std::pair<int, int>>
+      CLOSED_idx;  // Changed to thread-local variable
 
-	  auto update_guide_path = [&](const int i) {
-	    // Use space-time A*
-	    // special case
-	    if (Q_from[i] == ins->goals[i]) {
-	      for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
-	      cached_collision_costs[i] = 0.0f; // Collision cost is 0 when at goal
-	      return;
-	    }
+  auto update_guide_path = [&](const int i) {
+    // Use space-time A*
+    // special case
+    if (Q_from[i] == ins->goals[i]) {
+      for (auto t = 0; t < WINDOW; ++t) guide_paths[i][t] = Q_from[i];
+      cached_collision_costs[i] = 0.0f;  // Collision cost is 0 when at goal
+      return;
+    }
 
     // initialize search utils
     std::priority_queue<WSPPNode*, WSPPNodes, decltype(cmp)> OPEN(cmp);
@@ -180,9 +183,11 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
         while (temp_n != nullptr) {
           guide_paths[i][temp_n->when] = temp_n->where;
           if (temp_n->parent != nullptr) {
-            auto collision = CT.getCollisionCost(temp_n->parent->where, temp_n->where, temp_n->parent->when);
+            auto collision = CT.getCollisionCost(
+                temp_n->parent->where, temp_n->where, temp_n->parent->when);
             if (collision >= 1) {
-              total_collision_cost += COLLISION_COST + collision * COLLISION_COST_ORDER;
+              total_collision_cost +=
+                  COLLISION_COST + collision * COLLISION_COST_ORDER;
             }
           }
           temp_n = temp_n->parent;
@@ -201,20 +206,20 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       for (auto&& v : C) {
         const auto t = n->when + 1;
         if (CLOSED[t][v->id] != nullptr) continue;
-        
+
         auto n_new = get_node(i, v, n);
         OPEN.push(n_new);
       }
     }
-    
-	    if (guide_paths[i][0] == nullptr) {
-	      std::cout << "Not Supposed Error" << std::endl;
-	      for (auto t = 0; t < WINDOW; ++t) {
-	        guide_paths[i][t] = Q_from[i];
-	      }
-	      cached_collision_costs[i] = 0.0f;
-	    }
-    
+
+    if (guide_paths[i][0] == nullptr) {
+      std::cout << "Not Supposed Error" << std::endl;
+      for (auto t = 0; t < WINDOW; ++t) {
+        guide_paths[i][t] = Q_from[i];
+      }
+      cached_collision_costs[i] = 0.0f;
+    }
+
     // clear CLOSED
     for (auto&& st : CLOSED_idx) CLOSED[st.first][st.second] = nullptr;
   };
@@ -230,14 +235,14 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
   //     CT.enrollPath(i, guide_paths[i]);
   //   }
   // }
-	  for (auto i = 0; i < N; ++i) {
-	    if (guide_paths[i].size() <= 1) continue;
-	    if (Q_from[i] != guide_paths[i][1]) continue;
-	    for (auto t = 0; t < WINDOW - 1; ++t) {
-	      guide_paths[i][t] = guide_paths[i][t + 1];
-	    }
-	    CT.enrollPath(i, guide_paths[i]);
-	  }
+  for (auto i = 0; i < N; ++i) {
+    if (guide_paths[i].size() <= 1) continue;
+    if (Q_from[i] != guide_paths[i][1]) continue;
+    for (auto t = 0; t < WINDOW - 1; ++t) {
+      guide_paths[i][t] = guide_paths[i][t + 1];
+    }
+    CT.enrollPath(i, guide_paths[i]);
+  }
 
   // Reference trajectory improvement
   int refine_iterations = (NUM_REFINE == 0) ? 1 : NUM_REFINE;
@@ -252,7 +257,8 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
     for (auto _i = 0; _i < N; ++_i) {
       const auto i = order[_i];
       if (CLEAR_GOAL_FIRST && !is_at_goal.empty() && is_at_goal[i]) continue;
-      if (NUM_REFINE == 0 && guide_paths[i][0] != guide_paths[i].back()) continue;
+      if (NUM_REFINE == 0 && guide_paths[i][0] != guide_paths[i].back())
+        continue;
       Q_to[i] = nullptr;
       CT.clearPath(i, guide_paths[i]);
       update_guide_path(i);
@@ -267,7 +273,7 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
       }
     }
   }
-  
+
   // post processing
   for (int i = 0; i < N; ++i) {
     Q_to[i] = guide_paths[i][1];
@@ -277,14 +283,14 @@ void LocalGuide::construct(const Config& Q_from, const std::vector<int>& order)
 
 LocalHeuristic LocalGuide::get(const int i, Vertex* v)
 {
-  if (!ON || NUM_REFINE < 0 || Q_to[i] == nullptr)
-    return D->get(i, v);
+  if (!ON || NUM_REFINE < 0 || Q_to[i] == nullptr) return D->get(i, v);
   if (v == Q_to[i]) return 0;
   // return 1;
   return D->get(i, v) + 1;
 }
 
-void LocalGuide::set_guide_paths(const std::vector<Path>& paths) {
+void LocalGuide::set_guide_paths(const std::vector<Path>& paths)
+{
   if (paths.size() != static_cast<size_t>(N)) {
     std::cerr << "ERROR: paths size mismatch in set_guide_paths" << std::endl;
     return;
@@ -292,11 +298,14 @@ void LocalGuide::set_guide_paths(const std::vector<Path>& paths) {
   guide_paths = paths;
 }
 
-std::vector<Path> LocalGuide::get_current_guide_paths() const {
+std::vector<Path> LocalGuide::get_current_guide_paths() const
+{
   return guide_paths;
 }
 
-void LocalGuide::reconstruct_solution_paths(const std::vector<std::vector<Path>>& solution_paths) {
+void LocalGuide::reconstruct_solution_paths(
+    const std::vector<std::vector<Path>>& solution_paths)
+{
   guide_paths_history.clear();
   guide_paths_history = solution_paths;
   current_step = solution_paths.size();

@@ -186,15 +186,15 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   auto OPEN =
       std::priority_queue<SINode *, SINodes, decltype(cmpNodes)>(cmpNodes);
   std::unordered_map<SINode, SINode *, SINodeHasher> EXPLORED;
-  
+
   // Get safe intervals for start node
   auto &start_intervals = ST.get(s_i);
   if (start_intervals.empty()) return solution_path;
-  
+
   OPEN.push(new SINode(++node_id, start_intervals[0], s_i, 0, 0, D->get(i, s_i),
                        nullptr));
 
-  SINode* best_node = nullptr;
+  SINode *best_node = nullptr;
   int best_distance = INT_MAX;
 
   // main loop
@@ -262,14 +262,14 @@ Path sipp_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   // Construct path from the best node
   if (best_node != nullptr) {
     // backtrack
-    std::vector<Vertex*> temp_path;
+    std::vector<Vertex *> temp_path;
     auto current = best_node;
     while (current != nullptr) {
       temp_path.push_back(current->v);
       current = current->parent;
     }
     std::reverse(temp_path.begin(), temp_path.end());
-    
+
     // Adjust path to match window_size
     solution_path.resize(window_size);
     for (int t = 0; t < window_size; ++t) {
@@ -312,16 +312,30 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     const int f;  // total cost = g + h
     SIPPSNode *parent;
 
-    SIPPSNode(const int _uuid, const SI &si, Vertex *_v, int _t, int _g, int _c, int _f, SIPPSNode *_parent)
-        : uuid(_uuid), time_start(si.first), time_end(si.second), v(_v), t(_t), g(_g), c(_c), f(_f), parent(_parent) {}
+    SIPPSNode(const int _uuid, const SI &si, Vertex *_v, int _t, int _g, int _c,
+              int _f, SIPPSNode *_parent)
+        : uuid(_uuid),
+          time_start(si.first),
+          time_end(si.second),
+          v(_v),
+          t(_t),
+          g(_g),
+          c(_c),
+          f(_f),
+          parent(_parent)
+    {
+    }
 
-    bool operator==(const SIPPSNode &other) const {
-      return (other.v->id == v->id && other.time_start == time_start && other.time_end == time_end);
+    bool operator==(const SIPPSNode &other) const
+    {
+      return (other.v->id == v->id && other.time_start == time_start &&
+              other.time_end == time_end);
     }
   };
 
   struct SIPPSNodeHasher {
-    uint operator()(const SIPPSNode &n) const {
+    uint operator()(const SIPPSNode &n) const
+    {
       uint hash = n.v->id;
       hash ^= n.time_start + 0x9e3779b9 + (hash << 6) + (hash >> 2);
       hash ^= n.time_end + 0x9e3779b9 + (hash << 6) + (hash >> 2);
@@ -341,20 +355,23 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   };
 
   int node_id = 0;
-  auto OPEN = std::priority_queue<SIPPSNode *, std::vector<SIPPSNode *>, decltype(cmpNodes)>(cmpNodes);
+  auto OPEN = std::priority_queue<SIPPSNode *, std::vector<SIPPSNode *>,
+                                  decltype(cmpNodes)>(cmpNodes);
   std::unordered_map<SIPPSNode, SIPPSNode *, SIPPSNodeHasher> EXPLORED;
-  
+
   // Get safe intervals for start node
   auto &start_intervals = ST.get(s_i);
   if (start_intervals.empty()) return solution_path;
-  
-  OPEN.push(new SIPPSNode(++node_id, start_intervals[0], s_i, 0, 0, 0, D->get(i, s_i), nullptr));
 
-  SIPPSNode* best_node = nullptr;
+  OPEN.push(new SIPPSNode(++node_id, start_intervals[0], s_i, 0, 0, 0,
+                          D->get(i, s_i), nullptr));
+
+  SIPPSNode *best_node = nullptr;
   int best_collision_count = INT_MAX;
   int best_distance = INT_MAX;
   int nodes_expanded = 0;
-  const int max_nodes = std::min(window_size * 500, 5000); // More restrictive limit for efficiency
+  const int max_nodes = std::min(
+      window_size * 500, 5000);  // More restrictive limit for efficiency
 
   // main loop
   while (!OPEN.empty() && !is_expired(deadline) && nodes_expanded < max_nodes) {
@@ -366,7 +383,8 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     if (itr_e != EXPLORED.end()) {
       auto existing = itr_e->second;
       // More balanced dominance: moderate preference for fewer collisions
-      if (existing->c < n->c - 1 || (existing->c <= n->c && existing->g <= n->g - 1)) {
+      if (existing->c < n->c - 1 ||
+          (existing->c <= n->c && existing->g <= n->g - 1)) {
         delete n;
         continue;
       }
@@ -377,18 +395,20 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
     // When reaching window_size, record the best node
     if (n->t >= window_size - 1) {
       int distance_to_goal = D->get(i, n->v);
-      // More balanced evaluation: consider both collisions and distance, but be more lenient
+      // More balanced evaluation: consider both collisions and distance, but be
+      // more lenient
       bool is_better = false;
       if (best_node == nullptr) {
         is_better = true;
       } else if (n->c < best_collision_count - 1) {
         // Prefer if moderately fewer collisions
         is_better = true;
-      } else if (n->c <= best_collision_count + 2 && distance_to_goal < best_distance) {
+      } else if (n->c <= best_collision_count + 2 &&
+                 distance_to_goal < best_distance) {
         // Allow slightly more collisions if closer to goal
         is_better = true;
       }
-      
+
       if (is_better) {
         best_collision_count = n->c;
         best_distance = distance_to_goal;
@@ -399,7 +419,7 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
 
     // When reaching the goal (within window_size)
     if (n->v == g_i) {
-      if (n->c < best_collision_count || 
+      if (n->c < best_collision_count ||
           (n->c == best_collision_count && n->g < best_distance)) {
         best_collision_count = n->c;
         best_distance = n->g;
@@ -411,7 +431,7 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
         break;
       }
       // Balanced collision acceptance for efficiency
-      if (n->c <= 3 && nodes_expanded < max_nodes / 2) { 
+      if (n->c <= 3 && nodes_expanded < max_nodes / 2) {
         // Continue searching for better solutions if we haven't searched much
         continue;
       } else if (n->c <= 7) {
@@ -431,7 +451,7 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
         auto t_earliest = INT_MAX;
         int collision_penalty = 0;
         bool found_collision_free = false;
-        
+
         for (auto t = std::max(n->t, si.first - 1);
              t <= std::min(n->time_end, si.second - 1); ++t) {
           auto collision_cost = CT->getCollisionCost(n->v, u, t);
@@ -442,27 +462,30 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
             found_collision_free = true;
             break;
           } else if (!found_collision_free) {
-            // Collision exists - allow with penalty if no collision-free option found
+            // Collision exists - allow with penalty if no collision-free option
+            // found
             if (t_earliest == INT_MAX) {
               t_earliest = t + 1;
               collision_penalty = 1;  // Count as one collision
             }
           }
         }
-        
+
         if (t_earliest >= INT_MAX || t_earliest >= window_size) continue;
 
         // valid neighbor with soft constraint handling
         auto g_val = n->g + (t_earliest - n->t);
         auto c_val = n->c + collision_penalty;  // Add collision penalty
         auto f_val = g_val + D->get(i, u);
-        auto n_new = new SIPPSNode(++node_id, si, u, t_earliest, g_val, c_val, f_val, n);
+        auto n_new =
+            new SIPPSNode(++node_id, si, u, t_earliest, g_val, c_val, f_val, n);
 
         auto itr = EXPLORED.find(*n_new);
         if (itr != EXPLORED.end()) {
           auto existing = itr->second;
           // Skip if existing node dominates new node
-          if (existing->c < n_new->c || (existing->c == n_new->c && existing->g <= n_new->g)) {
+          if (existing->c < n_new->c ||
+              (existing->c == n_new->c && existing->g <= n_new->g)) {
             delete n_new;
             continue;
           }
@@ -475,14 +498,14 @@ Path sipps_window(const int i, Vertex *s_i, Vertex *g_i, DistTable *D,
   // Construct path from the best node
   if (best_node != nullptr) {
     // backtrack
-    std::vector<Vertex*> temp_path;
+    std::vector<Vertex *> temp_path;
     auto current = best_node;
     while (current != nullptr) {
       temp_path.push_back(current->v);
       current = current->parent;
     }
     std::reverse(temp_path.begin(), temp_path.end());
-    
+
     // Adjust path to match window_size
     solution_path.resize(window_size);
     for (int t = 0; t < window_size; ++t) {

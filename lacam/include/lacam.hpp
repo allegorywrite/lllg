@@ -73,7 +73,7 @@ struct HNode {
   int arrived_goal_cnt;
 
   HNode(Config _C, DistTable *D, HNode *_parent = nullptr,
-        const std::vector<HNodePriority>* initial_priorities = nullptr);
+        const std::vector<HNodePriority> *initial_priorities = nullptr);
   ~HNode();
 };
 using HNodes = std::vector<HNode *>;
@@ -122,7 +122,8 @@ struct LaCAM {
   HNodes GC_HNodes;
   HNode *H_init = nullptr;
   HNode *H_goal = nullptr;
-  // store last partial solution (backtracked from deepest explored HNode when no goal found)
+  // store last partial solution (backtracked from deepest explored HNode when
+  // no goal found)
   Solution last_partial_solution;
   // whether STEP_LIMIT (horizon) was reached during the last solve
   bool reached_horizon;
@@ -141,14 +142,18 @@ struct LaCAM {
     LegacyEdge = 0,
     // Under RELAX_GOAL, counts how many agents have not yet visited their goal
     // (arrived_goal[i]==0) at the *from* node, per timestep.
-    // This is equivalent to sum of first-goal-arrival times (up to an additive constant).
+    // This is equivalent to sum of first-goal-arrival times (up to an additive
+    // constant).
     UnreachedCount = 1,
     // Weighted sum: w_u * unreached_count(from) + w_m * move_count(from,to)
     WeightedSumUnreachedMove = 2,
-    // Lexicographic minimization of (unreached_count(from), move_count(from,to)).
+    // Lexicographic minimization of (unreached_count(from),
+    // move_count(from,to)).
     LexiUnreachedMove = 3,
-    // Count how many agents are NOT on their goal after the transition (to-state).
-    // This directly prefers putting more agents onto their current goals sooner.
+    // Count how many agents are NOT on their goal after the transition
+    // (to-state).
+    // This directly prefers putting more agents onto their current goals
+    // sooner.
     NextGoalMissCount = 4,
   };
 
@@ -169,8 +174,9 @@ struct LaCAM {
   static CostMode COST_MODE;
   static int COST_W_UNREACHED;
   static int COST_W_MOVE;
-  // If true, compute the unreached term using the post-transition reached state.
-  // This makes reaching a goal "count immediately" in the weighted_sum objective.
+  // If true, compute the unreached term using the post-transition reached
+  // state. This makes reaching a goal "count immediately" in the weighted_sum
+  // objective.
   static bool UNREACHED_USE_AFTER;
 
   // rewrite logging state (per-solve)
@@ -192,11 +198,18 @@ struct LaCAM {
   PathCost get_transition_cost(const HNode *from, const HNode *to) const;
   void rewrite(HNode *H_from, HNode *H_to);
   void apply_new_solution(const Solution &plan);
-  const Solution& get_last_partial_solution() const { return last_partial_solution; }
+  const Solution &get_last_partial_solution() const
+  {
+    return last_partial_solution;
+  }
   bool was_horizon_reached() const { return reached_horizon; }
-  void set_initial_priorities(const std::vector<HNodePriority>& priorities);
-  const std::vector<HNodePriority>& get_last_root_priorities() const { return last_root_priorities; }
-  const std::vector<std::vector<HNodePriority>>& get_last_solution_priorities() const
+  void set_initial_priorities(const std::vector<HNodePriority> &priorities);
+  const std::vector<HNodePriority> &get_last_root_priorities() const
+  {
+    return last_root_priorities;
+  }
+  const std::vector<std::vector<HNodePriority>> &get_last_solution_priorities()
+      const
   {
     return last_solution_priorities;
   }

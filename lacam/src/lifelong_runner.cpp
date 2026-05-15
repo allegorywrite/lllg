@@ -1,25 +1,20 @@
 #include "../include/lifelong_runner.hpp"
 
-#include "../include/planner.hpp"
-#include "../include/post_processing.hpp"
-#include "../include/metrics.hpp"
-#include "../include/graph.hpp"
 #include <algorithm>
 #include <chrono>
 #include <random>
 #include <string>
 #include <utility>
 
-int run_lifelong(const Instance& base_ins,
-                 int verbose,
-                 float time_limit_sec,
-                 int seed,
-                 int steps_limit,
-                 const std::string& output_name,
-                 const std::string& map_name,
-                 bool log_short,
-                 LifelongSeedMode seed_mode,
-                 bool log_all_step,
+#include "../include/graph.hpp"
+#include "../include/metrics.hpp"
+#include "../include/planner.hpp"
+#include "../include/post_processing.hpp"
+
+int run_lifelong(const Instance& base_ins, int verbose, float time_limit_sec,
+                 int seed, int steps_limit, const std::string& output_name,
+                 const std::string& map_name, bool log_short,
+                 LifelongSeedMode seed_mode, bool log_all_step,
                  bool log_local_guidance)
 {
   // Prepare state
@@ -40,7 +35,8 @@ int run_lifelong(const Instance& base_ins,
   // Helper: generate a new random goal for agent i
   auto generate_random_goal = [&](int agent_id) -> Vertex* {
     // Check predefined goals first
-    if (agent_id < (int)predefined_goals.size() && !predefined_goals[agent_id].empty()) {
+    if (agent_id < (int)predefined_goals.size() &&
+        !predefined_goals[agent_id].empty()) {
       auto v = predefined_goals[agent_id].front();
       predefined_goals[agent_id].pop_front();
       return v;
@@ -49,11 +45,14 @@ int run_lifelong(const Instance& base_ins,
     std::vector<Vertex*> candidates;
     candidates.reserve(G->V.size());
     for (auto v : G->V) {
-      if (v == current_config[agent_id]) continue; // avoid current position
+      if (v == current_config[agent_id]) continue;  // avoid current position
       bool conflict = false;
       for (size_t j = 0; j < current_goals.size(); ++j) {
         if ((int)j == agent_id) continue;
-        if (current_goals[j] == v) { conflict = true; break; }
+        if (current_goals[j] == v) {
+          conflict = true;
+          break;
+        }
       }
       if (!conflict) candidates.push_back(v);
     }
@@ -66,7 +65,8 @@ int run_lifelong(const Instance& base_ins,
   auto D = DistTable(base_ins);
 
   // DistTable-based lower-bound proxy:
-  // Sum shortest-path distances (ignoring other agents) at each goal assignment time.
+  // Sum shortest-path distances (ignoring other agents) at each goal assignment
+  // time.
   // - initial assignment: start -> initial goal
   // - reassignment: (old goal position) -> new goal
   long long lb_sp_dist_sum = 0;
@@ -89,7 +89,8 @@ int run_lifelong(const Instance& base_ins,
   int steps_done = 0;
   double total_comp_time_ms = 0.0;
   Solution prev_plan;  // previous cycle's full plan (for seeding guide)
-  std::vector<Path> prev_local_guide_paths;  // previous cycle's LocalGuide step-0 paths
+  std::vector<Path>
+      prev_local_guide_paths;  // previous cycle's LocalGuide step-0 paths
   bool prev_local_guide_paths_valid = false;
   std::vector<HNodePriority> prev_step_priorities;
 
@@ -126,7 +127,8 @@ int run_lifelong(const Instance& base_ins,
     std::function<void(LaCAM&)> init_cb = nullptr;
     auto append_init_cb = [&](std::function<void(LaCAM&)> extra_cb) {
       if (!extra_cb) return;
-      if (!init_cb) init_cb = std::move(extra_cb);
+      if (!init_cb)
+        init_cb = std::move(extra_cb);
       else {
         auto prev_cb = init_cb;
         init_cb = [prev_cb, extra_cb = std::move(extra_cb)](LaCAM& lacam_ref) {
@@ -135,24 +137,27 @@ int run_lifelong(const Instance& base_ins,
         };
       }
     };
-    std::vector<Path> seed_paths; // keep alive until init_cb executes
-    const bool can_seed = LocalGuide::ON && LocalGuide::WINDOW > 0 && seed_mode != LifelongSeedMode::None;
+    std::vector<Path> seed_paths;  // keep alive until init_cb executes
+    const bool can_seed = LocalGuide::ON && LocalGuide::WINDOW > 0 &&
+                          seed_mode != LifelongSeedMode::None;
     if (can_seed) {
       if (seed_mode == LifelongSeedMode::PrevPlan && !prev_plan.empty()) {
         seed_paths.assign(cyc_ins.N, Path(LocalGuide::WINDOW, nullptr));
         for (int i = 0; i < (int)cyc_ins.N; ++i) {
-          if (goal_updated[i]) continue; // Skip seeding if goal was updated
+          if (goal_updated[i]) continue;  // Skip seeding if goal was updated
           // seed_paths[i][0] = current_config[i];
           for (int t = 0; t < LocalGuide::WINDOW; ++t) {
             if (t < (int)prev_plan.size()) seed_paths[i][t] = prev_plan[t][i];
             // else seed_paths[i][t] = current_goals[i];
-            else seed_paths[i][t] = prev_plan.back()[i];
+            else
+              seed_paths[i][t] = prev_plan.back()[i];
           }
         }
         append_init_cb([&seed_paths](LaCAM& lacam_ref) {
           lacam_ref.local_guide.set_guide_paths(seed_paths);
         });
-      } else if (seed_mode == LifelongSeedMode::PrevLocalGuide && prev_local_guide_paths_valid) {
+      } else if (seed_mode == LifelongSeedMode::PrevLocalGuide &&
+                 prev_local_guide_paths_valid) {
         seed_paths = prev_local_guide_paths;
         append_init_cb([&seed_paths](LaCAM& lacam_ref) {
           lacam_ref.local_guide.set_guide_paths(seed_paths);
@@ -167,52 +172,67 @@ int run_lifelong(const Instance& base_ins,
       prev_step_priorities.clear();
     }
     // Pass existing DistTable
-    auto result = solve_with_timing(cyc_ins, verbose - 1, &cyc_deadline, seed, init_cb, &D);
+    auto result = solve_with_timing(cyc_ins, verbose - 1, &cyc_deadline, seed,
+                                    init_cb, &D);
     auto sol = result.solution;
     auto lacam = result.lacam;
     auto cyc_end = std::chrono::high_resolution_clock::now();
-    double cyc_comp_time_ms = std::chrono::duration<double, std::milli>(cyc_end - cyc_start).count();
+    double cyc_comp_time_ms =
+        std::chrono::duration<double, std::milli>(cyc_end - cyc_start).count();
     total_comp_time_ms += cyc_comp_time_ms;
 
     // Determine solved / subsolved
-    // Note: in relax-goal mode, the final configuration does not need to match goals.
+    // Note: in relax-goal mode, the final configuration does not need to match
+    // goals.
     const bool relax_goal = LaCAM::RELAX_GOAL;
     const bool cycle_solved =
         !sol.empty() &&
-        (relax_goal ? is_feasible_solution_relax_goal(cyc_ins, sol, /*verbose=*/0)
-                    : is_feasible_solution(cyc_ins, sol, /*verbose=*/0));
-    bool cycle_subsolved = (!cycle_solved && lacam != nullptr && lacam->was_horizon_reached());
+        (relax_goal
+             ? is_feasible_solution_relax_goal(cyc_ins, sol, /*verbose=*/0)
+             : is_feasible_solution(cyc_ins, sol, /*verbose=*/0));
+    bool cycle_subsolved =
+        (!cycle_solved && lacam != nullptr && lacam->was_horizon_reached());
     // Per-cycle stats (concise) with label override
-    const char* label = cycle_solved ? "solved" : (cycle_subsolved ? "subsolved" : "failed");
+    const char* label =
+        cycle_solved ? "solved" : (cycle_subsolved ? "subsolved" : "failed");
     print_stats(verbose, &cyc_deadline, cyc_ins, sol, cyc_comp_time_ms, label);
 
-    // If failed (not reaching goals), dump a one-shot log for this cycle to result_stepX.txt
-    // If failed (not reaching goals) or log_all_step is enabled, dump a one-shot log for this cycle to result_stepX.txt
+    // If failed (not reaching goals), dump a one-shot log for this cycle to
+    // result_stepX.txt If failed (not reaching goals) or log_all_step is
+    // enabled, dump a one-shot log for this cycle to result_stepX.txt
     if (log_all_step || (!cycle_solved && !cycle_subsolved)) {
       // Build filename: <output_name without extension>_step<steps_done>.txt
       auto out_path = output_name;
       auto slash_pos = out_path.find_last_of('/');
       auto dot_pos = out_path.find_last_of('.');
-      if (dot_pos == std::string::npos || (slash_pos != std::string::npos && dot_pos < slash_pos)) {
+      if (dot_pos == std::string::npos ||
+          (slash_pos != std::string::npos && dot_pos < slash_pos)) {
         dot_pos = out_path.size();
       }
       std::string stem = out_path.substr(0, dot_pos);
       std::string ext = out_path.substr(dot_pos);
       if (ext.empty()) ext = ".txt";
-      std::string per_cycle_name = stem + "_step" + std::to_string(steps_done) + ext;
-      // Backtrack partial solution from LaCAM's deepest explored node if not solved
-      const auto& solution_to_log = cycle_solved ? sol : lacam->get_last_partial_solution();
+      std::string per_cycle_name =
+          stem + "_step" + std::to_string(steps_done) + ext;
+      // Backtrack partial solution from LaCAM's deepest explored node if not
+      // solved
+      const auto& solution_to_log =
+          cycle_solved ? sol : lacam->get_last_partial_solution();
       bool solved_override = cycle_solved;
-      make_log(cyc_ins, solution_to_log, per_cycle_name, cyc_comp_time_ms, map_name, seed,
+      make_log(cyc_ins, solution_to_log, per_cycle_name, cyc_comp_time_ms,
+               map_name, seed,
                /*log_short=*/false,
-               /*local_guide=*/(log_local_guidance && lacam ? &lacam->local_guide : nullptr),
+               /*local_guide=*/
+               (log_local_guidance && lacam ? &lacam->local_guide : nullptr),
                /*comp_time_init_ms=*/-1.0,
                /*solution_init=*/{}, /*lifelong_goals_history=*/nullptr,
                /*lifelong_lb_sp_metrics=*/nullptr, /*goal_change_count=*/0,
-               /*local_guidance_history=*/nullptr, /*override_solved=*/&solved_override);
+               /*local_guidance_history=*/nullptr,
+               /*override_solved=*/&solved_override);
     }
 
-    // Execute exactly one step: solved -> use sol, subsolved -> use partial, failed -> stay
+    // Execute exactly one step: solved -> use sol, subsolved -> use partial,
+    // failed -> stay
     int priority_index_for_next_config = -1;
     Config next_config = current_config;
     if (cycle_solved && sol.size() >= 2) {
@@ -226,7 +246,8 @@ int run_lifelong(const Instance& base_ins,
       }
     }
 
-    // Record local guidance for this executed step (use step-0 guidance of this cycle)
+    // Record local guidance for this executed step (use step-0 guidance of this
+    // cycle)
     bool updated_prev_local_guide = false;
     if (LocalGuide::ON && lacam != nullptr) {
       try {
@@ -257,8 +278,10 @@ int run_lifelong(const Instance& base_ins,
       const auto& solution_priorities = lacam->get_last_solution_priorities();
       if (priority_index_for_next_config >= 0 &&
           priority_index_for_next_config < (int)solution_priorities.size() &&
-          (int)solution_priorities[priority_index_for_next_config].size() == cyc_ins.N) {
-        prev_step_priorities = solution_priorities[priority_index_for_next_config];
+          (int)solution_priorities[priority_index_for_next_config].size() ==
+              cyc_ins.N) {
+        prev_step_priorities =
+            solution_priorities[priority_index_for_next_config];
       } else {
         prev_step_priorities.clear();
       }
@@ -272,22 +295,28 @@ int run_lifelong(const Instance& base_ins,
   }
 
   // Logging (skip feasibility since goals changed over time)
-  // print_stats(verbose, nullptr, base_ins, executed_solution, total_comp_time_ms);
+  // print_stats(verbose, nullptr, base_ins, executed_solution,
+  // total_comp_time_ms);
   const long long lb_sp_dist_max_agent =
       lb_sp_dist_per_agent.empty()
           ? 0
-          : *std::max_element(lb_sp_dist_per_agent.begin(), lb_sp_dist_per_agent.end());
+          : *std::max_element(lb_sp_dist_per_agent.begin(),
+                              lb_sp_dist_per_agent.end());
   const double lb_sp_dist_avg_agent =
-      base_ins.N > 0 ? (static_cast<double>(lb_sp_dist_sum) / static_cast<double>(base_ins.N)) : 0.0;
+      base_ins.N > 0 ? (static_cast<double>(lb_sp_dist_sum) /
+                        static_cast<double>(base_ins.N))
+                     : 0.0;
   const LifelongLbSpMetrics lifelong_lb_sp_metrics{
-      lb_sp_dist_sum, lb_sp_dist_avg_agent, lb_sp_dist_max_agent, lb_sp_task_count,
-      lb_sp_unreachable_task_count};
-  make_log(base_ins, executed_solution, output_name, total_comp_time_ms, map_name, seed,
-           log_short, nullptr, -1.0, {}, &goals_history, &lifelong_lb_sp_metrics, 0,
+      lb_sp_dist_sum, lb_sp_dist_avg_agent, lb_sp_dist_max_agent,
+      lb_sp_task_count, lb_sp_unreachable_task_count};
+  make_log(base_ins, executed_solution, output_name, total_comp_time_ms,
+           map_name, seed, log_short, nullptr, -1.0, {}, &goals_history,
+           &lifelong_lb_sp_metrics, 0,
            log_local_guidance ? &local_guidance_history : nullptr);
 
   // Compute and print Lifelong summary metrics
-  // total_completed_tasks: count goal reassignment events across agents over time
+  // total_completed_tasks: count goal reassignment events across agents over
+  // time
   long long total_completed_tasks = 0;
   if (!goals_history.empty()) {
     for (size_t t = 1; t < goals_history.size(); ++t) {
@@ -299,12 +328,16 @@ int run_lifelong(const Instance& base_ins,
       }
     }
   }
-  const double comp_time_s = total_comp_time_ms > 0.0 ? (total_comp_time_ms / 1000.0) : 0.0;
+  const double comp_time_s =
+      total_comp_time_ms > 0.0 ? (total_comp_time_ms / 1000.0) : 0.0;
   const int ms = get_makespan(executed_solution);
-  const double throughput_tasks = comp_time_s > 0.0 ? (static_cast<double>(total_completed_tasks) / static_cast<double>(ms)) : 0.0;
-  const double throughput_makespan = comp_time_s > 0.0 ? (ms / comp_time_s) : 0.0;
-  info(1, verbose,
-       "Lifelong summary:\t",
+  const double throughput_tasks =
+      comp_time_s > 0.0 ? (static_cast<double>(total_completed_tasks) /
+                           static_cast<double>(ms))
+                        : 0.0;
+  const double throughput_makespan =
+      comp_time_s > 0.0 ? (ms / comp_time_s) : 0.0;
+  info(1, verbose, "Lifelong summary:\t",
        "total_completed_tasks=", total_completed_tasks,
        "\tlb_sp_dist_sum=", lb_sp_dist_sum,
        "\tlb_sp_dist_avg_agent=", lb_sp_dist_avg_agent,

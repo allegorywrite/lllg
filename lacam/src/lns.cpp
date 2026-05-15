@@ -68,7 +68,8 @@ static bool is_at_goal_at_t1(const Vertex* goal, const Path& path)
 
 static int get_path_relax_cost(const Vertex* goal, const Path& path)
 {
-  if (!LNS::RELAX_OBJECTIVE_T1) return get_path_first_goal_time_cost(goal, path);
+  if (!LNS::RELAX_OBJECTIVE_T1)
+    return get_path_first_goal_time_cost(goal, path);
   // Lexicographic: (not-at-goal-at-t=1 count) first, then time-to-first-goal.
   constexpr int T1_WEIGHT = 1'000'000;
   const int t1_penalty = is_at_goal_at_t1(goal, path) ? 0 : T1_WEIGHT;
@@ -84,13 +85,10 @@ static int get_sum_of_relax_costs(const Instance* ins, const Paths& paths)
   return total;
 }
 
-static Path plan_finite_horizon_reach_goal_once(const Instance* ins,
-                                               const int agent_id,
-                                               Vertex* start, Vertex* goal,
-                                               DistTable* D,
-                                               CollisionTable* CT,
-                                               const Deadline* deadline,
-                                               const int horizon)
+static Path plan_finite_horizon_reach_goal_once(
+    const Instance* ins, const int agent_id, Vertex* start, Vertex* goal,
+    DistTable* D, CollisionTable* CT, const Deadline* deadline,
+    const int horizon)
 {
   if (horizon < 0) return Path();
   if (ins == nullptr || ins->G == nullptr) return Path();
@@ -164,7 +162,8 @@ static Path plan_finite_horizon_reach_goal_once(const Instance* ins,
 
       if (!reached2) {
         const int dist = D->get(agent_id, u);
-        if (dist > H - t2) continue;  // cannot reach goal within remaining steps
+        if (dist > H - t2)
+          continue;  // cannot reach goal within remaining steps
       }
       const int h2 = reached2 ? 0 : D->get(agent_id, u);
       const int f2 = g2 + h2;
@@ -181,12 +180,13 @@ static Path plan_finite_horizon_reach_goal_once(const Instance* ins,
   return Path();
 }
 
-LNS::LNS(const Instance *_ins, DistTable *_D, Solution &_solution,
-         const Deadline *_deadline, const int seed, const int _verbose)
+LNS::LNS(const Instance* _ins, DistTable* _D, Solution& _solution,
+         const Deadline* _deadline, const int seed, const int _verbose)
     : ins(_ins),
       D(_D),
-      solution_paths(RELAX_GOAL_CONDITION ? make_initial_paths_relaxed(_solution)
-                                          : make_initial_paths_classic(_solution)),
+      solution_paths(RELAX_GOAL_CONDITION
+                         ? make_initial_paths_relaxed(_solution)
+                         : make_initial_paths_classic(_solution)),
       cost(RELAX_GOAL_CONDITION ? get_sum_of_relax_costs(_ins, solution_paths)
                                 : get_sum_of_costs_paths(solution_paths)),
       deadline(_deadline),
@@ -229,7 +229,8 @@ void LNS::step()
 
   const int legacy_nb_size =
       std::max(1, std::min(get_random_int(MT, 1, 30), int(N / 4)));
-  const int nb_size = std::max(1, std::min(NEIGHBOR_SIZE > 0 ? NEIGHBOR_SIZE : legacy_nb_size, N));
+  const int nb_size = std::max(
+      1, std::min(NEIGHBOR_SIZE > 0 ? NEIGHBOR_SIZE : legacy_nb_size, N));
 
   solver_info(5, "size of modif set: ", nb_size);
 
@@ -282,7 +283,8 @@ void LNS::step()
   auto make_intersection_subset = [&]() -> std::vector<int> {
     if (intersection_vertices.empty()) return unique_shuffled_prefix(nb_size);
     std::unordered_set<int> chosen;
-    const int idx = get_random_int(MT, 0, (int)intersection_vertices.size() - 1);
+    const int idx =
+        get_random_int(MT, 0, (int)intersection_vertices.size() - 1);
     const int start_v = intersection_vertices[idx];
     collect_agents_at_vertex(start_v, chosen);
 
@@ -316,8 +318,9 @@ void LNS::step()
     return agents;
   };
 
-  auto collect_conflicts_for_move = [&](int agent_id, int from_v, int to_v, int t_from,
-                                       std::unordered_set<int>& out) {
+  auto collect_conflicts_for_move = [&](int agent_id, int from_v, int to_v,
+                                        int t_from,
+                                        std::unordered_set<int>& out) {
     const int t_to = t_from + 1;
     if (to_v >= 0 && to_v < V_size && t_to >= 0 &&
         t_to < (int)CT.body[to_v].size()) {
@@ -370,10 +373,12 @@ void LNS::step()
     std::unordered_set<int> chosen;
     chosen.insert(a);
 
-    auto random_walk = [&](int agent_id, Vertex* start, int start_t, int upperbound) {
+    auto random_walk = [&](int agent_id, Vertex* start, int start_t,
+                           int upperbound) {
       if (start == nullptr) return;
       Vertex* loc = start;
-      for (int t = start_t; t < upperbound && (int)chosen.size() < nb_size; ++t) {
+      for (int t = start_t; t < upperbound && (int)chosen.size() < nb_size;
+           ++t) {
         std::vector<Vertex*> next_locs = loc->actions;
         while (!next_locs.empty()) {
           const int idx = get_random_int(MT, 0, (int)next_locs.size() - 1);
@@ -427,7 +432,8 @@ void LNS::step()
     return agents;
   };
 
-  auto select_subset = [&](int attempt, std::unordered_set<int>& rw_tabu) -> std::vector<int> {
+  auto select_subset =
+      [&](int attempt, std::unordered_set<int>& rw_tabu) -> std::vector<int> {
     switch (NEIGHBOR_STRATEGY) {
       case NeighborhoodStrategy::RandomBlock: {
         std::vector<int> agents;

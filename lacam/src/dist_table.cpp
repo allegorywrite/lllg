@@ -14,8 +14,9 @@ DistTable::DistTable(const Instance *ins)
 
 void DistTable::setup(const Instance *ins)
 {
-  // Capture pointer by value to avoid dangling references, and wait for all tasks
-  const Instance* local = ins;
+  // Capture pointer by value to avoid dangling references, and wait for all
+  // tasks
+  const Instance *local = ins;
   auto bfs = [this, local](const int i) {
     auto g_i = local->goals[i];
     auto Q = std::queue<Vertex *>({g_i});
@@ -46,7 +47,7 @@ int DistTable::get(const int i, const int v_id) { return table[i][v_id]; }
 
 int DistTable::get(const int i, const Vertex *v) { return get(i, v->id); }
 
-void DistTable::update(int agent_id, Vertex* new_goal)
+void DistTable::update(int agent_id, Vertex *new_goal)
 {
   std::fill(table[agent_id].begin(), table[agent_id].end(), K);
   auto Q = std::queue<Vertex *>({new_goal});

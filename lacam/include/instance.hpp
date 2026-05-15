@@ -11,8 +11,9 @@ struct Instance {
   Graph *G;       // graph
   Config starts;  // initial configuration
   Config goals;   // goal configuration
-  std::vector<std::deque<Vertex*>> agent_predefined_goals; // predefined goal sequence for each agent
-  const uint N;   // number of agents
+  std::vector<std::deque<Vertex *>>
+      agent_predefined_goals;  // predefined goal sequence for each agent
+  const uint N;                // number of agents
   bool delete_graph_after_used;
 
   Instance(Graph *_G, const Config &_starts, const Config &_goals);

@@ -1,15 +1,17 @@
 #include "../include/planner.hpp"
+
 #include <chrono>
 
-std::pair<Solution, LaCAM*> solve(const Instance &ins, int verbose, const Deadline *deadline,
-               int seed)
+std::pair<Solution, LaCAM *> solve(const Instance &ins, int verbose,
+                                   const Deadline *deadline, int seed)
 {
   auto result = solve_with_timing(ins, verbose, deadline, seed, nullptr);
   return {result.solution, result.lacam};
 }
 
-SolveResult solve_with_timing(const Instance &ins, int verbose, const Deadline *deadline,
-               int seed, std::function<void(LaCAM&)> init, DistTable *D)
+SolveResult solve_with_timing(const Instance &ins, int verbose,
+                              const Deadline *deadline, int seed,
+                              std::function<void(LaCAM &)> init, DistTable *D)
 {
   // Measure initial solution computation time
   auto init_start = std::chrono::high_resolution_clock::now();
@@ -30,12 +32,13 @@ SolveResult solve_with_timing(const Instance &ins, int verbose, const Deadline *
   if (init) {
     init(*lacam);
   }
-  
+
   auto solution = lacam->solve();
   auto solution_init = solution;
   auto init_end = std::chrono::high_resolution_clock::now();
-  auto comp_time_init_ms = std::chrono::duration<double, std::milli>(init_end - init_start).count();
-  
+  auto comp_time_init_ms =
+      std::chrono::duration<double, std::milli>(init_end - init_start).count();
+
   if (solution.empty() || !LNS::ON) {
     return {solution, solution_init, lacam, comp_time_init_ms};
   }

@@ -177,15 +177,17 @@ GGHeuristic GlobalGuide::get(const int i, Vertex *v)
   return std::make_pair(V_size, V_size);
 }
 
-int GlobalGuide::get_simple(const int i, const Vertex *v_from, const Vertex *v_to)
+int GlobalGuide::get_simple(const int i, const Vertex *v_from,
+                            const Vertex *v_to)
 {
   if (!ON) return 0;
   if (i < 0 || i >= static_cast<int>(paths.size())) return 0;
-  
+
   auto &&path = paths[i];
   if (path.empty() || v_from == path.back()) return 0;
 
   auto itr = std::find(path.begin(), path.end(), v_from);
-  if (itr != path.end() && (itr + 1) != path.end() && *(itr + 1) == v_to) return -1;
+  if (itr != path.end() && (itr + 1) != path.end() && *(itr + 1) == v_to)
+    return -1;
   return 0;
 }

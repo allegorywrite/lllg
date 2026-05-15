@@ -18,7 +18,7 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
 {
   const int t_to = t_from + 1;
   auto collision = 0;
-  
+
   // vertex collision
   if (t_to < body[v_to->id].size()) {
     for (auto agent : body[v_to->id][t_to]) {
@@ -27,7 +27,7 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
       }
     }
   }
-  
+
   // edge collision
   if (t_to < body[v_from->id].size() && t_from < body[v_to->id].size()) {
     for (auto j : body[v_from->id][t_to]) {
@@ -38,7 +38,7 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
       }
     }
   }
-  
+
   if (!no_use_goal_occupation) {
     // goal collision (agents occupy their last vertex forever after arrival)
     for (auto last_timestep : body_last[v_to->id]) {
@@ -47,7 +47,7 @@ int CollisionTable::getCollisionCost(const Vertex *v_from, const Vertex *v_to,
       }
     }
   }
-  
+
   return collision;
 }
 
@@ -88,7 +88,7 @@ void CollisionTable::clearPath(const int i, Path &path)
   if (path[0] == nullptr) {
     return;
   }
-  
+
   const auto T_i = (int)path.size() - 1;
 
   for (auto t = 0; t <= T_i; ++t) {
@@ -112,7 +112,7 @@ void CollisionTable::clearPath(const int i, Path &path)
       collision_cnt -= getCollisionCost(path[t - 1], path[t], t - 1);
     }
   }
-  
+
   if (!no_use_goal_occupation) {
     // goal (agents occupy their last vertex forever after arrival)
     if (path.back() != nullptr) {

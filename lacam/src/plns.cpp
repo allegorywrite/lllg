@@ -4,7 +4,8 @@ int PLNS::NUM_REFINERS = 8;
 
 constexpr auto TIME_WAIT = std::chrono::milliseconds(0);
 
-static int get_sum_of_first_goal_times(const Instance* ins, const Solution& solution)
+static int get_sum_of_first_goal_times(const Instance *ins,
+                                       const Solution &solution)
 {
   if (ins == nullptr) return 0;
   if (solution.empty()) return 0;
@@ -25,9 +26,10 @@ static int get_sum_of_first_goal_times(const Instance* ins, const Solution& solu
   return total;
 }
 
-static int get_sum_of_relax_cost(const Instance* ins, const Solution& solution)
+static int get_sum_of_relax_cost(const Instance *ins, const Solution &solution)
 {
-  if (!LNS::RELAX_OBJECTIVE_T1) return get_sum_of_first_goal_times(ins, solution);
+  if (!LNS::RELAX_OBJECTIVE_T1)
+    return get_sum_of_first_goal_times(ins, solution);
   if (ins == nullptr) return 0;
   if (solution.empty()) return 0;
 
@@ -45,8 +47,8 @@ static int get_sum_of_relax_cost(const Instance* ins, const Solution& solution)
         break;
       }
     }
-    const bool at_t1 =
-        has_t1 ? (solution[1][i]->id == goal_id) : (solution[0][i]->id == goal_id);
+    const bool at_t1 = has_t1 ? (solution[1][i]->id == goal_id)
+                              : (solution[0][i]->id == goal_id);
     total += (at_t1 ? 0 : T1_WEIGHT) + first_t;
   }
   return total;
@@ -93,8 +95,9 @@ Solution PLNS::refine()
       if (is_expired(deadline)) return true;
       if (proc.wait_for(TIME_WAIT) != std::future_status::ready) return false;
       auto solution_new = proc.get();
-      auto cost = LNS::RELAX_GOAL_CONDITION ? get_sum_of_relax_cost(ins, solution_new)
-                                            : get_sum_of_costs(solution_new);
+      auto cost = LNS::RELAX_GOAL_CONDITION
+                      ? get_sum_of_relax_cost(ins, solution_new)
+                      : get_sum_of_costs(solution_new);
       if (cost < cost_best) {
         solver_info(3, "cost update: ", cost_best, " -> ", cost);
         solution = solution_new;

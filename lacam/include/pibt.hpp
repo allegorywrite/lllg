@@ -59,7 +59,8 @@ struct PIBT {
 
   bool set_new_config(const Config &Q_from, Config &Q_to,
                       const std::vector<int> &order);
-  std::tuple<bool, int> funcPIBT(const int i, const Config &Q_from, Config &Q_to);
+  std::tuple<bool, int> funcPIBT(const int i, const Config &Q_from,
+                                 Config &Q_to);
 
   int is_swap_required_and_possible(const int ai, const Config &Q_from,
                                     Config &Q_to, Vertex *v_i_target);

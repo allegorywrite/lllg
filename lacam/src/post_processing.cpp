@@ -2,7 +2,7 @@
 
 #include "../include/dist_table.hpp"
 
-bool is_feasible_solution(const Instance &ins, const Solution &solution,
+bool is_feasible_solution(const Instance& ins, const Solution& solution,
                           const int verbose)
 {
   if (solution.empty()) return true;
@@ -53,7 +53,8 @@ bool is_feasible_solution(const Instance &ins, const Solution &solution,
   return true;
 }
 
-bool is_feasible_solution_relax_goal(const Instance &ins, const Solution &solution,
+bool is_feasible_solution_relax_goal(const Instance& ins,
+                                     const Solution& solution,
                                      const int verbose)
 {
   if (solution.empty()) return true;
@@ -114,8 +115,8 @@ bool is_feasible_solution_relax_goal(const Instance &ins, const Solution &soluti
   return true;
 }
 
-void print_stats(const int verbose, const Deadline *deadline,
-                 const Instance &ins, const Solution &solution,
+void print_stats(const int verbose, const Deadline* deadline,
+                 const Instance& ins, const Solution& solution,
                  const double comp_time_ms, const char* state_label)
 {
   auto ceil = [](float x) { return std::ceil(x * 100) / 100; };
@@ -124,24 +125,24 @@ void print_stats(const int verbose, const Deadline *deadline,
   const auto makespan_lb = get_makespan_lower_bound(ins, dist_table);
   const auto sum_of_costs = get_sum_of_costs(solution);
   const auto sum_of_costs_lb = get_sum_of_costs_lower_bound(ins, dist_table);
-  const bool solved = !solution.empty() && is_same_config(solution.back(), ins.goals);
-  const char* label = state_label != nullptr ? state_label : (solved ? "solved" : "failed");
-  info(2, verbose, deadline,
-       label,
-       "\tmakespan: ", makespan,
+  const bool solved =
+      !solution.empty() && is_same_config(solution.back(), ins.goals);
+  const char* label =
+      state_label != nullptr ? state_label : (solved ? "solved" : "failed");
+  info(2, verbose, deadline, label, "\tmakespan: ", makespan,
        " (lb=", makespan_lb, ", ub=", ceil((float)makespan / makespan_lb), ")",
-       "\tsum_of_costs: ", sum_of_costs,
-       " (lb=", sum_of_costs_lb, ", ub=", ceil((float)sum_of_costs / sum_of_costs_lb), ")");
+       "\tsum_of_costs: ", sum_of_costs, " (lb=", sum_of_costs_lb,
+       ", ub=", ceil((float)sum_of_costs / sum_of_costs_lb), ")");
 }
 
 // for log of map_name
 static const std::regex r_map_name = std::regex(R"(.+/(.+))");
 
-void make_log(const Instance &ins, const Solution &solution,
-              const std::string &output_name, const double comp_time_ms,
-              const std::string &map_name, const int seed,
-              const bool log_short, const LocalGuide* local_guide,
-              const double comp_time_init_ms, const Solution& solution_init,
+void make_log(const Instance& ins, const Solution& solution,
+              const std::string& output_name, const double comp_time_ms,
+              const std::string& map_name, const int seed, const bool log_short,
+              const LocalGuide* local_guide, const double comp_time_init_ms,
+              const Solution& solution_init,
               const std::vector<Config>* lifelong_goals_history,
               const LifelongLbSpMetrics* lifelong_lb_sp_metrics,
               const int goal_change_count,
@@ -240,7 +241,8 @@ void make_log(const Instance &ins, const Solution &solution,
     log << "\n";
   }
 
-  if (LocalGuide::ON && (local_guide != nullptr || local_guidance_history != nullptr)) {
+  if (LocalGuide::ON &&
+      (local_guide != nullptr || local_guidance_history != nullptr)) {
     log << "local_guidance=\n";
     if (local_guidance_history != nullptr) {
       log << "history_size=" << local_guidance_history->size() << "\n";
