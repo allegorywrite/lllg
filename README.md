@@ -7,10 +7,6 @@
 
 The paper will appear at SoCS-26.
 
-<!-- <p align="center">
-<img alt="Concept of Local vs. Global Guidance" src="media/concept.png" width="65%">
-</p> -->
-
 
 <table>
   <tr>
