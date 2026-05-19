@@ -1,6 +1,6 @@
 # LLLG: Lifelong LaCAM with Local Guidance for Lifelong MAPF
 
-[<img src="https://img.shields.io/badge/arxiv-2510.19072-990000" alt="Arxiv">](https://arxiv.org/abs/2510.19072)
+[<img src="https://img.shields.io/badge/arxiv-2605.16855-990000" alt="Arxiv">](http://arxiv.org/abs/2605.16855)
 
 **LLLG is the lifelong version of LG-LaCAM (AAAI-26)**, bringing local guidance to a receding-horizon planning framework for **Lifelong Multi-Agent Pathfinding (LMAPF)**. Local guidance supplies each agent with informative spatiotemporal cues that help mitigate congestion, reduce waiting, and improve short-horizon coordination in dense multi-agent environments. While local guidance has recently shown strong empirical benefits in one-shot MAPF, this work lifts the same idea to the lifelong setting, where agents continuously receive new tasks and must replan under strict real-time constraints. Our method scales effectively and maintains strong performance even in compact, dense environments with many tightly packed agents, yielding higher throughput and surpassing the prior state-of-the-art, thereby pushing the frontier for real-time lifelong MAPF.
 
