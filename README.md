@@ -28,11 +28,11 @@ The paper will appear at SoCS-26.
 If you find this work to be useful in your research, please consider citing:
 
 ```bibtex
-@article{arita2025local,
+@article{arita2026local,
   title={Lifelong LaCAM with Local Guidance for Lifelong MAPF},
   author={Arita, Tomoki and Okumura, Keisuke},
-  journal={arXiv preprint arXiv:2510.19072},
-  year={2025}
+  journal={arXiv preprint arxiv-2605.16855},
+  year={2026}
 }
 ```
 
